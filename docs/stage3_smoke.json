@@ -1,0 +1,54 @@
+[
+  {
+    "endpoint": "/api/v1/food/search",
+    "status": 200,
+    "skill": "FOOD",
+    "places": [
+      "圆苑(新世界城店)"
+    ],
+    "walking_meters": [
+      889
+    ],
+    "state_version": 1,
+    "degraded": [],
+    "restore_status": 200,
+    "restored_skill": "FOOD"
+  },
+  {
+    "endpoint": "/api/v1/attraction/plan",
+    "status": 200,
+    "skill": "ATTRACTION",
+    "places": [
+      "上海市历史博物馆"
+    ],
+    "walking_meters": [
+      428
+    ],
+    "state_version": 1,
+    "degraded": [
+      "WEATHER"
+    ],
+    "restore_status": 200,
+    "restored_skill": "ATTRACTION"
+  },
+  {
+    "endpoint": "/api/v1/travel",
+    "status": 200,
+    "skill": "ATTRACTION",
+    "places": [
+      "上海市历史博物馆"
+    ],
+    "walking_meters": [
+      428
+    ],
+    "state_version": 2,
+    "degraded": [
+      "WEATHER"
+    ],
+    "restore_status": 200,
+    "restored_skill": "ATTRACTION",
+    "interests": [
+      "博物馆"
+    ]
+  }
+]

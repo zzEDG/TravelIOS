@@ -1,0 +1,3233 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LangChain城市主题漫游Agent",
+    "description": "TravelOS：城市漫步、景点游览、餐厅推荐；高德地点与路线、和风天气、Jev辅助决策",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/citywalk/plan": {
+      "post": {
+        "tags": [
+          "城市漫步"
+        ],
+        "summary": "Plan Citywalk",
+        "operationId": "plan_citywalk_api_v1_citywalk_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CityWalkPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CityWalkPlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/attraction/plan": {
+      "post": {
+        "tags": [
+          "景点游览"
+        ],
+        "summary": "Plan Attraction",
+        "operationId": "plan_attraction_api_v1_attraction_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttractionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttractionPlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/food/search": {
+      "post": {
+        "tags": [
+          "餐厅推荐"
+        ],
+        "summary": "Search Food",
+        "operationId": "search_food_api_v1_food_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoodSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/travel": {
+      "post": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "Plan Travel",
+        "operationId": "plan_travel_api_v1_travel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TravelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TravelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trips": {
+      "get": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "按子系统检索规划历史",
+        "operationId": "list_trips_api_v1_trips_get",
+        "parameters": [
+          {
+            "name": "skill",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "CITYWALK",
+                    "ATTRACTION",
+                    "FOOD"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Skill"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trips/{trip_id}/history": {
+      "get": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "查看行程的历次版本",
+        "operationId": "trip_history_api_v1_trips__trip_id__history_get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 64,
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trips/{trip_id}": {
+      "get": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "Get Trip",
+        "operationId": "get_trip_api_v1_trips__trip_id__get",
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 64,
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripSnapshotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/locations/search": {
+      "post": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "Search Locations",
+        "operationId": "search_locations_api_v1_locations_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maps/static": {
+      "get": {
+        "tags": [
+          "统一入口"
+        ],
+        "summary": "获取高德地点分布图",
+        "operationId": "get_map_api_v1_maps_static_get",
+        "parameters": [
+          {
+            "name": "points",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 250,
+              "title": "Points"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/walk/plan": {
+      "post": {
+        "tags": [
+          "旧版兼容"
+        ],
+        "summary": "生成主题漫游路线",
+        "operationId": "create_walk_api_walk_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/api/walk/map": {
+      "get": {
+        "tags": [
+          "旧版兼容"
+        ],
+        "summary": "旧版地点分布图",
+        "operationId": "get_map_api_walk_map_get",
+        "deprecated": true,
+        "parameters": [
+          {
+            "name": "points",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 250,
+              "title": "Points"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "根路径",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "description": "健康检查",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AttractionPlanData": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "type": "integer",
+            "title": "State Version"
+          },
+          "routed_skill": {
+            "type": "string",
+            "const": "ATTRACTION",
+            "title": "Routed Skill",
+            "default": "ATTRACTION"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/GeoLocation"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedPlace"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSegment"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "title": "Estimated Minutes"
+          },
+          "total_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Walking Meters"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeatherState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverPhoto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "narration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TripNarration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "state_version",
+          "title",
+          "summary",
+          "origin",
+          "places",
+          "routes",
+          "estimated_minutes"
+        ],
+        "title": "AttractionPlanData"
+      },
+      "AttractionPlanRequest": {
+        "properties": {
+          "origin_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Name"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Version"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "additional_requirements": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Requirements"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeoLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 12.0,
+                "minimum": 0.5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Hours"
+          },
+          "interests": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interests"
+          },
+          "dislikes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dislikes"
+          },
+          "target_stops": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Stops"
+          },
+          "radius_meters": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 500.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius Meters"
+          },
+          "max_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Walking Meters"
+          },
+          "consider_weather": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consider Weather"
+          },
+          "travel_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Date"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AttractionPlanRequest"
+      },
+      "AttractionPlanResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AttractionPlanData"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "AttractionPlanResponse"
+      },
+      "CityWalkPlanData": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "type": "integer",
+            "title": "State Version"
+          },
+          "routed_skill": {
+            "type": "string",
+            "const": "CITYWALK",
+            "title": "Routed Skill",
+            "default": "CITYWALK"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/GeoLocation"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedPlace"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSegment"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "title": "Estimated Minutes"
+          },
+          "total_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Walking Meters"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeatherState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverPhoto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "narration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TripNarration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "state_version",
+          "title",
+          "summary",
+          "origin",
+          "places",
+          "routes",
+          "estimated_minutes"
+        ],
+        "title": "CityWalkPlanData"
+      },
+      "CityWalkPlanRequest": {
+        "properties": {
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Version"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme"
+          },
+          "available_hours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 8.0,
+                "minimum": 2.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Hours"
+          },
+          "target_stops": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 2.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Stops"
+          },
+          "start_location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeoLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Name"
+          },
+          "max_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30000.0,
+                "minimum": 500.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Walking Meters"
+          },
+          "avoid_commercial": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avoid Commercial"
+          },
+          "travel_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Date"
+          },
+          "additional_requirements": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Requirements"
+          },
+          "interests": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interests"
+          },
+          "dislikes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dislikes"
+          },
+          "visit_order": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Order"
+          },
+          "end_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End With"
+          }
+        },
+        "type": "object",
+        "title": "CityWalkPlanRequest"
+      },
+      "CityWalkPlanResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CityWalkPlanData"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "CityWalkPlanResponse"
+      },
+      "CoverPhoto": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "photographer": {
+            "type": "string",
+            "title": "Photographer"
+          },
+          "photographer_url": {
+            "type": "string",
+            "title": "Photographer Url"
+          },
+          "unsplash_url": {
+            "type": "string",
+            "title": "Unsplash Url"
+          },
+          "alt": {
+            "type": "string",
+            "title": "Alt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "photographer",
+          "photographer_url",
+          "unsplash_url",
+          "alt"
+        ],
+        "title": "CoverPhoto"
+      },
+      "FoodPlanData": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "type": "integer",
+            "title": "State Version"
+          },
+          "routed_skill": {
+            "type": "string",
+            "const": "FOOD",
+            "title": "Routed Skill",
+            "default": "FOOD"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/GeoLocation"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedPlace"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSegment"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "estimated_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Minutes"
+          },
+          "total_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Walking Meters"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeatherState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverPhoto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "narration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TripNarration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_semantics": {
+            "type": "string",
+            "const": "ALTERNATIVES",
+            "title": "Route Semantics",
+            "default": "ALTERNATIVES"
+          },
+          "meal_type": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Meal Type"
+          },
+          "max_distance_meters": {
+            "type": "integer",
+            "title": "Max Distance Meters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "state_version",
+          "title",
+          "summary",
+          "origin",
+          "places",
+          "routes",
+          "meal_type",
+          "max_distance_meters"
+        ],
+        "title": "FoodPlanData"
+      },
+      "FoodSearchRequest": {
+        "properties": {
+          "origin_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Name"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Version"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "additional_requirements": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Requirements"
+          },
+          "center_location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeoLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "meal_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "breakfast",
+                  "lunch",
+                  "dinner",
+                  "snack"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Type"
+          },
+          "cuisine_preference": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cuisine Preference"
+          },
+          "avoid": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "minLength": 1
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avoid"
+          },
+          "max_distance_meters": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Distance Meters"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FoodSearchRequest"
+      },
+      "FoodSearchResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FoodPlanData"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "FoodSearchResponse"
+      },
+      "GeoLocation": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "coordinate_system": {
+            "type": "string",
+            "enum": [
+              "GCJ-02",
+              "WGS84"
+            ],
+            "title": "Coordinate System",
+            "default": "GCJ-02"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "GeoLocation"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LocationSearchRequest": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 2,
+            "title": "City"
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "city",
+          "query"
+        ],
+        "title": "LocationSearchRequest"
+      },
+      "LocationSearchResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceCandidate"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LocationSearchResponse"
+      },
+      "PlaceCandidate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoLocation"
+          },
+          "source": {
+            "type": "string",
+            "const": "AMAP",
+            "title": "Source",
+            "default": "AMAP"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "knowledge": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "address",
+          "location"
+        ],
+        "title": "PlaceCandidate"
+      },
+      "PlannedPlace": {
+        "properties": {
+          "step_order": {
+            "type": "integer",
+            "title": "Step Order"
+          },
+          "poi": {
+            "$ref": "#/components/schemas/PlaceCandidate"
+          },
+          "why_selected": {
+            "type": "string",
+            "title": "Why Selected"
+          },
+          "stay_minutes": {
+            "type": "integer",
+            "title": "Stay Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_order",
+          "poi",
+          "why_selected",
+          "stay_minutes"
+        ],
+        "title": "PlannedPlace"
+      },
+      "ResponseMeta": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1.0",
+            "title": "Schema Version",
+            "default": "1.0"
+          },
+          "decision_source": {
+            "type": "string",
+            "const": "JEV",
+            "title": "Decision Source",
+            "default": "JEV"
+          },
+          "fallback_applied": {
+            "type": "boolean",
+            "title": "Fallback Applied",
+            "default": false
+          },
+          "degraded_services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Degraded Services"
+          },
+          "route_confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Confidence"
+          }
+        },
+        "type": "object",
+        "title": "ResponseMeta"
+      },
+      "RouteSegment": {
+        "properties": {
+          "from_poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Poi Id"
+          },
+          "to_poi_id": {
+            "type": "string",
+            "title": "To Poi Id"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Minutes"
+          },
+          "polyline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polyline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to_poi_id"
+        ],
+        "title": "RouteSegment"
+      },
+      "Stop": {
+        "properties": {
+          "poi_id": {
+            "type": "string",
+            "title": "Poi Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "stay_minutes": {
+            "type": "integer",
+            "title": "Stay Minutes"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "amap_url": {
+            "type": "string",
+            "title": "Amap Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "poi_id",
+          "name",
+          "address",
+          "category",
+          "longitude",
+          "latitude",
+          "stay_minutes",
+          "reason",
+          "amap_url"
+        ],
+        "title": "Stop"
+      },
+      "TravelClarificationData": {
+        "properties": {
+          "routed_skill": {
+            "type": "string",
+            "const": "CLARIFY",
+            "title": "Routed Skill",
+            "default": "CLARIFY"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "TravelClarificationData"
+      },
+      "TravelRequest": {
+        "properties": {
+          "origin_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Name"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Message"
+          },
+          "trip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Version"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeoLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "travel_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "TravelRequest"
+      },
+      "TravelResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CityWalkPlanData"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AttractionPlanData"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FoodPlanData"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "routed_skill",
+                  "mapping": {
+                    "ATTRACTION": "#/components/schemas/AttractionPlanData",
+                    "CITYWALK": "#/components/schemas/CityWalkPlanData",
+                    "FOOD": "#/components/schemas/FoodPlanData"
+                  }
+                }
+              },
+              {
+                "$ref": "#/components/schemas/TravelClarificationData"
+              }
+            ],
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TravelResponse"
+      },
+      "TripHistoryItem": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "type": "integer",
+            "title": "State Version"
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "CITYWALK",
+              "ATTRACTION",
+              "FOOD"
+            ],
+            "title": "Skill"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "origin_name": {
+            "type": "string",
+            "title": "Origin Name"
+          },
+          "place_count": {
+            "type": "integer",
+            "title": "Place Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "expired": {
+            "type": "boolean",
+            "title": "Expired"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "state_version",
+          "latest_version",
+          "skill",
+          "city",
+          "title",
+          "summary",
+          "origin_name",
+          "place_count",
+          "created_at",
+          "updated_at",
+          "expired"
+        ],
+        "title": "TripHistoryItem"
+      },
+      "TripHistoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TripHistoryItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "TripHistoryPage"
+      },
+      "TripHistoryResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TripHistoryPage"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TripHistoryResponse"
+      },
+      "TripNarration": {
+        "properties": {
+          "narrator": {
+            "type": "string",
+            "enum": [
+              "CityWalkNarratorAgent",
+              "AttractionNarratorAgent",
+              "FoodNarratorAgent"
+            ],
+            "title": "Narrator"
+          },
+          "evaluation": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Evaluation"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "based_on_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Based On Version"
+          },
+          "user_request": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Request"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "LLM",
+              "RULES"
+            ],
+            "title": "Source",
+            "default": "LLM"
+          }
+        },
+        "type": "object",
+        "required": [
+          "narrator",
+          "evaluation"
+        ],
+        "title": "TripNarration"
+      },
+      "TripSnapshot": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/TripState"
+          },
+          "latest_plan": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CityWalkPlanData"
+              },
+              {
+                "$ref": "#/components/schemas/AttractionPlanData"
+              },
+              {
+                "$ref": "#/components/schemas/FoodPlanData"
+              }
+            ],
+            "title": "Latest Plan",
+            "discriminator": {
+              "propertyName": "routed_skill",
+              "mapping": {
+                "ATTRACTION": "#/components/schemas/AttractionPlanData",
+                "CITYWALK": "#/components/schemas/CityWalkPlanData",
+                "FOOD": "#/components/schemas/FoodPlanData"
+              }
+            }
+          },
+          "latest_version": {
+            "type": "integer",
+            "title": "Latest Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "latest_plan",
+          "latest_version"
+        ],
+        "title": "TripSnapshot"
+      },
+      "TripSnapshotResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "const": 0,
+            "title": "Code",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "const": "success",
+            "title": "Message",
+            "default": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TripSnapshot"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TripSnapshotResponse"
+      },
+      "TripState": {
+        "properties": {
+          "trip_id": {
+            "type": "string",
+            "title": "Trip Id"
+          },
+          "state_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "State Version"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "current_location": {
+            "$ref": "#/components/schemas/GeoLocation"
+          },
+          "origin_name": {
+            "type": "string",
+            "title": "Origin Name",
+            "default": ""
+          },
+          "available_hours": {
+            "type": "number",
+            "maximum": 12.0,
+            "minimum": 0.5,
+            "title": "Available Hours"
+          },
+          "target_stops": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Target Stops"
+          },
+          "max_walking_meters": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30000.0,
+                "minimum": 100.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Walking Meters"
+          },
+          "avoid_commercial": {
+            "type": "boolean",
+            "title": "Avoid Commercial",
+            "default": false
+          },
+          "travel_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Date"
+          },
+          "additional_requirements": {
+            "type": "string",
+            "title": "Additional Requirements",
+            "default": ""
+          },
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Interests"
+          },
+          "dislikes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dislikes"
+          },
+          "visit_order": {
+            "items": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Visit Order"
+          },
+          "end_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End With"
+          },
+          "visited_places": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Visited Places"
+          },
+          "rejected_places": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rejected Places"
+          },
+          "current_skill": {
+            "type": "string",
+            "enum": [
+              "CITYWALK",
+              "ATTRACTION",
+              "FOOD"
+            ],
+            "title": "Current Skill",
+            "default": "CITYWALK"
+          },
+          "radius_meters": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 500.0,
+            "title": "Radius Meters",
+            "default": 5000
+          },
+          "consider_weather": {
+            "type": "boolean",
+            "title": "Consider Weather",
+            "default": true
+          },
+          "meal_type": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Meal Type",
+            "default": "dinner"
+          },
+          "cuisine_preference": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cuisine Preference"
+          },
+          "food_avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Food Avoid"
+          },
+          "max_distance_meters": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 100.0,
+            "title": "Max Distance Meters",
+            "default": 1500
+          },
+          "food_limit": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Food Limit",
+            "default": 3
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trip_id",
+          "state_version",
+          "city",
+          "theme",
+          "current_location",
+          "available_hours",
+          "target_stops",
+          "created_at",
+          "updated_at",
+          "expires_at"
+        ],
+        "title": "TripState"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WalkLeg": {
+        "properties": {
+          "from_name": {
+            "type": "string",
+            "title": "From Name"
+          },
+          "to_name": {
+            "type": "string",
+            "title": "To Name"
+          },
+          "distance_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance M"
+          },
+          "duration_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Min"
+          },
+          "from_poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Poi Id"
+          },
+          "to_poi_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Poi Id"
+          },
+          "polyline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polyline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_name",
+          "to_name"
+        ],
+        "title": "WalkLeg"
+      },
+      "WalkPlan": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "introduction": {
+            "type": "string",
+            "title": "Introduction"
+          },
+          "duration_hours": {
+            "type": "integer",
+            "title": "Duration Hours"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/Stop"
+            },
+            "type": "array",
+            "title": "Stops"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/WalkLeg"
+            },
+            "type": "array",
+            "title": "Legs"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "title": "Estimated Minutes"
+          },
+          "weather": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Weather"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rain_tip": {
+            "type": "string",
+            "title": "Rain Tip"
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverPhoto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "map_points": {
+            "type": "string",
+            "title": "Map Points"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "city",
+          "theme",
+          "title",
+          "introduction",
+          "duration_hours",
+          "stops",
+          "legs",
+          "estimated_minutes",
+          "rain_tip",
+          "map_points"
+        ],
+        "title": "WalkPlan"
+      },
+      "WalkRequest": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 2,
+            "title": "City"
+          },
+          "theme": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 2,
+            "title": "Theme",
+            "default": "自由漫步"
+          },
+          "duration_hours": {
+            "type": "integer",
+            "maximum": 8.0,
+            "minimum": 2.0,
+            "title": "Duration Hours",
+            "default": 3
+          },
+          "start_place": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Start Place",
+            "default": ""
+          },
+          "visit_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Date"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Notes",
+            "default": ""
+          },
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Interests"
+          },
+          "dislikes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Dislikes"
+          },
+          "visit_order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Visit Order"
+          },
+          "end_with": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End With"
+          },
+          "avoid_commercial": {
+            "type": "boolean",
+            "title": "Avoid Commercial",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "city"
+        ],
+        "title": "WalkRequest"
+      },
+      "WalkResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/WalkPlan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "WalkResponse"
+      },
+      "Weather": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "AMAP",
+              "QWEATHER"
+            ],
+            "title": "Source",
+            "default": "AMAP"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "temperature_max_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Max C"
+          },
+          "temperature_min_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Min C"
+          },
+          "precipitation_probability_day": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Probability Day"
+          },
+          "precipitation_probability_night": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Probability Night"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "day_weather": {
+            "type": "string",
+            "title": "Day Weather"
+          },
+          "night_weather": {
+            "type": "string",
+            "title": "Night Weather"
+          },
+          "day_temp": {
+            "type": "string",
+            "title": "Day Temp"
+          },
+          "night_temp": {
+            "type": "string",
+            "title": "Night Temp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "day_weather",
+          "night_weather",
+          "day_temp",
+          "night_temp"
+        ],
+        "title": "Weather"
+      },
+      "WeatherState": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "AMAP",
+              "QWEATHER"
+            ],
+            "title": "Source",
+            "default": "AMAP"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "temperature_max_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Max C"
+          },
+          "temperature_min_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Min C"
+          },
+          "precipitation_probability_day": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Probability Day"
+          },
+          "precipitation_probability_night": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Probability Night"
+          },
+          "forecast_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Forecast Date"
+          },
+          "day_condition": {
+            "type": "string",
+            "title": "Day Condition"
+          },
+          "night_condition": {
+            "type": "string",
+            "title": "Night Condition"
+          },
+          "day_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Temperature C"
+          },
+          "night_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Night Temperature C"
+          },
+          "rain_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rain Probability"
+          },
+          "is_outdoor_favorable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Outdoor Favorable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forecast_date",
+          "day_condition",
+          "night_condition"
+        ],
+        "title": "WeatherState"
+      }
+    }
+  }
+}
