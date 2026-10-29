@@ -12,8 +12,8 @@ async def get_static_map(points: str, amap: AmapService) -> tuple[bytes, str]:
             if not (73 <= lon <= 135 and 3 <= lat <= 54):
                 raise ValueError("坐标超出支持范围")
             coordinates.append((lon, lat))
-        if not (2 <= len(coordinates) <= 6):
-            raise ValueError("需要2至6个地点")
+        if not (2 <= len(coordinates) <= 10):
+            raise ValueError("需要2至10个地点（含起点）")
         return await amap.static_map(coordinates)
     except AmapServiceError as exc:
         raise MapServiceError("高德地图服务暂不可用") from exc
