@@ -27,3 +27,8 @@ deploy/*.tar.gz
 deploy/*.tar
 
 deploy/postgres.part.*
+
+# Personal resumes
+*简历*
+*resume*
+*Resume*
