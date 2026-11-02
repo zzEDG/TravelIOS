@@ -25,12 +25,11 @@ class FoodAgent(DiscoveryAgent):
 
     async def execute(self, state: TripState) -> FoodPlanData:
         locked = self.locked_recommendations(state, state.max_distance_meters)
-        result = await self.prepare_candidates(
-            state, searches={key: {"notes": state.additional_requirements, **self.selection_preferences(state)}
+        result, places = await self.prepare_recommendations(
+            state, locked=locked, searches={key: {"notes": state.additional_requirements, **self.selection_preferences(state)}
                              for key in (state.cuisine_preference or ["餐厅"])[:3]},
             radius=state.max_distance_meters, target_count=state.food_limit, types="050000",
         )
-        places = await self.complete_recommendations(state, result.places, state.food_limit, locked)
         notes = ["距离为各餐厅到同一起点的直线距离。",
                  "未核验菜单、过敏原、营业时间或价格；口味与忌口仅作软偏好，请向餐厅确认。"]
 

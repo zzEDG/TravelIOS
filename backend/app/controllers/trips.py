@@ -4,7 +4,7 @@ from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, Path, Query
 from app.controllers.errors import TravelRoute
 from app.services.plan_result import snapshot_response
-from app.models.travel import TripHistoryResponse, TripSnapshotResponse
+from app.models.travel import TripHistoryResponse, TripSnapshotResponse, TripDeleteResponse
 from app.services.trip_service import TripService
 from app.controllers.dependencies import get_trip_service
 
@@ -36,3 +36,12 @@ async def get_trip(
     trips: TripService = Depends(get_trip_service),
 ) -> TripSnapshotResponse:
     return snapshot_response(await run_in_threadpool(trips.get_trip, trip_id, version))
+
+
+@router.delete("/trips/{trip_id}", response_model=TripDeleteResponse, summary="删除自己的规划及全部历史")
+async def delete_trip(
+    trip_id: str = Path(..., min_length=5, max_length=64),
+    trips: TripService = Depends(get_trip_service),
+) -> TripDeleteResponse:
+    await run_in_threadpool(trips.delete_trip, trip_id)
+    return TripDeleteResponse()

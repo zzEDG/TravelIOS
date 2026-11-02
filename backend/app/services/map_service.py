@@ -4,7 +4,7 @@ from app.integrations.amap_service import AmapService, AmapServiceError
 class MapServiceError(RuntimeError):
     """外部地图不可用时交给控制器转换成接口错误。"""
 
-async def get_static_map(points: str, amap: AmapService) -> tuple[bytes, str]:
+async def get_static_map(points: str, amap: AmapService, *, start: int | None = None) -> tuple[bytes, str]:
     try:
         coordinates = []
         for pair in points.split(";"):
@@ -14,7 +14,7 @@ async def get_static_map(points: str, amap: AmapService) -> tuple[bytes, str]:
             coordinates.append((lon, lat))
         if not (2 <= len(coordinates) <= 10):
             raise ValueError("需要2至10个地点（含起点）")
-        return await amap.static_map(coordinates)
+        return await amap.static_map(coordinates, start=start) if start is not None else await amap.static_map(coordinates)
     except AmapServiceError as exc:
         raise MapServiceError("高德地图服务暂不可用") from exc
     except (ValueError, TypeError):

@@ -16,6 +16,9 @@
           </div>
           <div class="history-actions">
             <a-button :disabled="disabled" @click="router.push({name:ROUTE_NAMES.TRIP_DETAIL,params:{id:item.trip_id},query:{version:item.state_version}})">查看</a-button>
+            <a-popconfirm v-if="!tripId" title="删除这份规划及全部历史版本？此操作无法撤销。" ok-text="删除" cancel-text="取消" :disabled="disabled || !!deleting" @confirm="remove(item)">
+              <a-button danger :disabled="disabled || !!deleting" :loading="deleting === item.trip_id">删除</a-button>
+            </a-popconfirm>
             <a-button type="primary" :disabled="disabled" @click="edit(item)">载入修改</a-button>
           </div>
         </article>
@@ -26,9 +29,10 @@
   </section>
 </template>
 <script setup lang="ts">
+import { showError } from '@/api/error-dialog'
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getHistory } from '@/api/travel'
+import { getHistory, deleteTrip } from '@/api/travel'
 import { ROUTE_NAMES } from '@/config/routes'
 import { skillNames } from '@/types/travel'
 import type { Skill, HistoryItem } from '@/types/travel'
@@ -36,7 +40,20 @@ const props = defineProps<{skill?: Skill; tripId?: string; disabled?: boolean; r
 const emit = defineEmits<{reload: []}>()
 const router = useRouter(), items = ref<HistoryItem[]>([]), total = ref(0), page = ref(1)
 const search = ref(''), query = ref(''), loading = ref(false), error = ref('')
+const deleting = ref('')
 let requestId = 0
+watch(error, value => { if (value) showError(value) })
+async function remove(item: HistoryItem) {
+  if (deleting.value) return
+  deleting.value = item.trip_id; error.value = ''
+  try {
+    await deleteTrip(item.trip_id)
+    if (page.value > 1 && items.value.every(row => row.trip_id === item.trip_id)) page.value--
+    await load()
+    if (page.value > 1 && !items.value.length && !error.value) { page.value = Math.max(1, Math.ceil(total.value / 5)); await load() }
+  } catch(e) { error.value = e instanceof Error ? e.message : '删除失败，请重试' }
+  finally { deleting.value = '' }
+}
 function edit(item: HistoryItem) {
   const current=router.currentRoute.value
   if(current.name === ROUTE_NAMES.HOME && current.query.trip === item.trip_id && current.query.version === String(item.state_version)) emit('reload')

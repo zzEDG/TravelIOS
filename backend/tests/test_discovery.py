@@ -267,7 +267,7 @@ class DiscoveryTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await amap.walking_route(results[0],results[0])).duration_min,2)
 
 
-    async def test_specific_keyword_does_not_mix_broad_categories(self):
+    async def test_attraction_retains_search_results_food_still_filters_types(self):
         class MixedAmap(FakeAmap):
             async def search_around(self, city, longitude, latitude, keyword, radius_meters, types):
                 self.calls.append(types)
@@ -280,8 +280,12 @@ class DiscoveryTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
         result = await skill.discover(city="上海", searches={"博物馆": {}},
                                       origin=(121.46, 31.22), radius=5000, types="110000|140100")
         candidates = result.places
-        self.assertEqual([p.poi_id for p in candidates], ["museum"])
+        self.assertEqual([p.poi_id for p in candidates], ["museum", "restaurant"])
         self.assertEqual(amap.calls, [""])
+        food = FoodAgent(amap, FakeJev(), FakeTranslator())
+        food_result = await food.discover(city="上海", searches={"美食": {}},
+                                          origin=(121.46, 31.22), radius=5000)
+        self.assertEqual([p.poi_id for p in food_result.places], ["restaurant"])
 
     async def test_old_citywalk_json_still_restores_without_new_fields(self):
         import json

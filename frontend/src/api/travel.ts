@@ -23,3 +23,13 @@ export function getHistory(options: { skill?: Skill; tripId?: string; query?: st
 export function searchLocations(city: string, query: string) { return v1Request<LocationMatch[]>(API_PATHS.LOCATION_SEARCH, {city,query}) }
 export function rememberTrip(id: string) { try { localStorage.setItem('travelOS:lastTrip', id) } catch { /* 后端保存仍然有效 */ } }
 export function lastTrip(): string | null { try { return localStorage.getItem('travelOS:lastTrip') } catch { return null } }
+
+export async function deleteTrip(id: string) {
+  const response = await request<Envelope<null>>(API_PATHS.TRIP(id), undefined, 'DELETE')
+  if (response.code !== 0) throw new TravelError(response.message)
+  try {
+    if (lastTrip() === id) localStorage.removeItem('travelOS:lastTrip')
+    sessionStorage.removeItem('cityWalkPlan')
+  } catch { /* 删除已保存，缓存不可用不影响结果。 */ }
+  return response
+}

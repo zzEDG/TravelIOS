@@ -18,7 +18,7 @@ async Controller
 
 国内服务的环境代理在客户端上显式关闭：高德、和风天气及官方 DeepSeek 使用 `trust_env=False`。覆盖服务独立创建的默认客户端与 `ServiceResources` 注入的请求内客户端；DeepSeek 同步、异步 SDK 客户端都设置，使用 `LLM_BASE_URL=https://api.deepseek.com/...` 的兼容调用方式也生效。`ServiceResources` 在请求结束时关闭其创建的同步和异步连接。其他模型服务、OpenRouter 和 Unsplash 保留原有环境代理行为，不修改进程的代理环境变量。显式传给工厂或服务的自定义客户端继续由调用方配置。
 
-`TripService` 的读写方法和 `TripStore` 保持同步，在 Controller 或主 Agent 的调用边界使用 `run_in_threadpool`。每次数据库操作仍创建并关闭自己的 SQLite 连接，保留原来的事务和乐观版本检查，不把网络请求放进数据库事务。
+`TripService` 的读写方法和 `TripStore` 保持同步，在 Controller 或主 Agent 的调用边界使用 `run_in_threadpool`。每次数据库操作仍创建并关闭自己的 PostgreSQL 连接，保留原来的事务和乐观版本检查，不把网络请求放进数据库事务。
 
 ## 哪些操作并发
 
@@ -74,7 +74,7 @@ by_id = {p.poi_id: route for p, route in zip(candidates, routes)}
 result = await self.resources.llm.with_structured_output(NarrationDraft).ainvoke(messages)
 ```
 
-同步 SQLite 保存：
+同步数据库保存：
 
 ```python
 record = await run_in_threadpool(self.trips.save, state, plan, previous)

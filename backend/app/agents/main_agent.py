@@ -13,7 +13,7 @@ from app.agents.narrators.base import NarratorAgent
 from app.models.travel import ResponseMeta, TravelClarificationData, TravelRequest, TravelResponse
 from app.models.trip_store import TripRecord
 from app.services.intent_router import RouteDecision, TravelRouter
-from app.services.preferences import PreferenceExtractor, PreferencePatch
+from app.services.preferences import PreferenceExtractor, PreferencePatch, explicitly_keep_all_previous_places
 from app.services.count_preferences import count_edit
 from app.services.trip_service import TripService
 from app.services.plan_result import add_count_notice, plan_response
@@ -80,7 +80,9 @@ class MainAgent:
                 count = edit.resolve(previous, decision.choice)
                 patch = patch.model_copy(update={agent_type.count_field: count})
             child_request = agent_type.request_from_message(request, patch, state)
-            if patch.lock_place_names or patch.unlock_place_names or patch.clear_locked_places:
+            explicit_keep_all = explicitly_keep_all_previous_places(request.message)
+            keep_all = patch.keep_all_previous_places or explicit_keep_all
+            if keep_all or patch.lock_place_names or patch.unlock_place_names or patch.clear_locked_places:
                 if not previous:
                     raise ClarificationNeeded("请先生成计划，再选择要保留的地点。")
                 if previous.latest_plan.routed_skill != decision.choice:
@@ -93,10 +95,12 @@ class MainAgent:
                         raise ClarificationNeeded(f"无法唯一确定“{name}”，请提供当前计划中的完整地点名称。")
                     return matches[0].poi.id
                 locked = [] if patch.clear_locked_places else list(state.locked_place_ids)
-                for name in patch.unlock_place_names or []:
+                if keep_all:
+                    locked = list(dict.fromkeys([*locked, *(place.poi.id for place in places)]))
+                for name in ([] if explicit_keep_all else patch.unlock_place_names or []):
                     poi_id = resolve(name)
                     locked = [item for item in locked if item != poi_id]
-                for name in patch.lock_place_names or []:
+                for name in ([] if keep_all else patch.lock_place_names or []):
                     poi_id = resolve(name)
                     if poi_id not in locked:
                         locked.append(poi_id)

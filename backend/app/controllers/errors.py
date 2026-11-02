@@ -3,6 +3,7 @@
 import logging
 import re
 import sqlite3
+import psycopg
 import httpx
 from openai import APIError, RateLimitError
 
@@ -21,6 +22,7 @@ from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException
 
 from app.models.travel import ErrorResponse
+from app.services.auth_service import AuthError
 
 
 class TravelAPIError(Exception):
@@ -39,10 +41,12 @@ class TravelRoute(APIRoute):
         async def handle(request: Request):
             try:
                 return await handler(request)
-            except (TravelAPIError, RequestValidationError, HTTPException):
+            except (AuthError, TravelAPIError, RequestValidationError, HTTPException):
                 raise
             except Exception as exc:
-                raise _handle_error(exc) from exc
+                error = _handle_error(exc)
+                diagnostics_logger.warning("业务异常 http_status=%d app_code=%d error_type=%s", error.status_code, error.code, type(exc).__name__)
+                raise error from exc
 
         return handle
 
@@ -65,6 +69,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 logger = logging.getLogger(__name__)
+diagnostics_logger = logging.getLogger("app.diagnostics")
 
 # 子类放在 ValueError 前，避免外部服务错误被当作用户参数错误。
 _ERRORS = {
@@ -106,7 +111,7 @@ def _handle_error(exc: Exception) -> TravelAPIError:
     for error_type, (status, code) in _ERRORS.items():
         if isinstance(exc, error_type):
             return TravelAPIError(status, code, str(exc))
-    if isinstance(exc, sqlite3.Error):
+    if isinstance(exc, (sqlite3.Error, psycopg.Error)):
         logger.exception("Trip storage error")
         return TravelAPIError(503, 50010, "行程存储暂不可用")
     if isinstance(exc, httpx.HTTPError):

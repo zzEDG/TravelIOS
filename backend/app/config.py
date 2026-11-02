@@ -16,6 +16,7 @@ load_dotenv(env_path)
 # VS Code 直接启动 Python 时通常不会读取 ~/.bashrc。仅在 WSL 且缺少密钥时，
 # 从交互式 Bash 补齐应用需要的变量；已有环境变量和 .env 优先。
 _SHELL_ENV_NAMES = (
+    "DATABASE_URL",
     "AMAP_API_KEY",
     "UNSPLASH_ACCESS_KEY",
     "DEEPSEEK_API_KEY",

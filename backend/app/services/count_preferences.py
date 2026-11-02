@@ -3,8 +3,8 @@ import re
 from dataclasses import dataclass
 
 _NUMBER = r"(?:[0-9]+|[零一二两三四五六七八九十]+)"
-_NOUN = r"(?:地点|景点|站点|目的地|餐厅|饭店|餐馆)"
-_ACTION = r"(?:增加到|减少到|调整为|调整到|改成|改为|换成|变成|设为|只要|只去|安排|规划|推荐|再加|再增加|增加|添加|减少|减掉|少去|多去)"
+_NOUN = r"(?:地点|景点|站点|目的地|餐厅|饭店|餐馆|点)"
+_ACTION = r"(?:增加到|加到|减少到|调整为|调整到|改成|改为|换成|变成|设为|只要|只去|安排|规划|推荐|新增|再增加|再加上|再加|多加|加上|增加|添加|加|减少|减掉|少去|多去)"
 _SPEC = rf"(?P<action>{_ACTION})?\s*(?P<number>{_NUMBER})\s*(?P<unit>个|家|处|站)\s*(?P<noun>{_NOUN})?"
 _OPTIONAL_UNIT = _SPEC.replace("(?P<unit>个|家|处|站)", "(?P<unit>个|家|处|站)?")
 _COUNT_ONLY = re.compile(
@@ -66,7 +66,7 @@ def count_edit(message: str) -> CountEdit | None:
         match = exact
     else:
         # 复杂句仍由模型理解；只覆盖单个有地点名词的明确数量。
-        if re.search(r"不要|不是|不想|别|至少|最多|不超过|以内|或者|还是|或|上次|以前|之前|昨天|[到至~-]\s*" + _NUMBER, text):
+        if re.search(r"不要|不是|不想|不(?:再)?(?:新增|增加|添加|加上|加|多加)|无需(?:新增|增加|添加|加)|别|至少|最多|不超过|以内|或者|还是|或|上次|以前|之前|昨天|[到至~-]\s*" + _NUMBER, text):
             return None
         matches = [m for m in _EXPLICIT.finditer(text) if m.group("noun")]
         if len(matches) != 1:
@@ -74,7 +74,7 @@ def count_edit(message: str) -> CountEdit | None:
         match = matches[0]
     action = match.group("action") or ""
     label = match.groupdict().get("label") or ""
-    delta = 1 if action in ("再加", "再增加", "增加", "添加", "多去") else (
+    delta = 1 if action in ("再加", "再加上", "再增加", "新增", "多加", "加上", "加", "增加", "添加", "多去") else (
         -1 if action in ("减少", "减掉", "少去") else 0
     )
     return CountEdit(

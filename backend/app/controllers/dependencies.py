@@ -10,6 +10,8 @@ from app.agents.main_agent import MainAgent
 from app.dependencies import ServiceResources
 from app.integrations.amap_service import AmapService
 from app.services.trip_service import TripService
+from app.models.postgres_trip_store import PostgresTripStore
+from app.controllers.auth_dependencies import require_user
 
 
 async def get_resources(x_ai_model: str = Header(default="default")) -> AsyncIterator[ServiceResources]:
@@ -18,14 +20,16 @@ async def get_resources(x_ai_model: str = Header(default="default")) -> AsyncIte
         yield resources
 
 
-async def get_main_agent(resources: ServiceResources = Depends(get_resources)) -> MainAgent:
-    trips = await run_in_threadpool(TripService, amap=resources.amap)
+async def get_main_agent(user=Depends(require_user), resources: ServiceResources = Depends(get_resources)) -> MainAgent:
+    store = await run_in_threadpool(PostgresTripStore, user_id=user["id"])
+    trips = TripService(store=store, amap=resources.amap)
     return MainAgent(trips=trips, resources=resources)
 
 
-async def get_trip_service(resources: ServiceResources = Depends(get_resources)) -> TripService:
-    return await run_in_threadpool(TripService, amap=resources.amap)
+async def get_trip_service(user=Depends(require_user), resources: ServiceResources = Depends(get_resources)) -> TripService:
+    store = await run_in_threadpool(PostgresTripStore, user_id=user["id"])
+    return TripService(store=store, amap=resources.amap)
 
 
-async def get_amap(resources: ServiceResources = Depends(get_resources)) -> AmapService:
+async def get_amap(user=Depends(require_user), resources: ServiceResources = Depends(get_resources)) -> AmapService:
     return resources.amap

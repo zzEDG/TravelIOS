@@ -17,7 +17,7 @@ from app.integrations.amap_service import Place, WalkingRoute
 from app.main import app
 from app.models.trip_store import TripStore
 from app.services.count_preferences import count_edit
-from app.services.preferences import PreferencePatch
+from app.services.preferences import PreferenceExtractor, PreferencePatch
 from app.services.trip_service import TripService
 from app.controllers.dependencies import get_trip_service
 from test_travel_stage2 import FakeExtractor, FakeRouter
@@ -65,6 +65,18 @@ class Choice:
         if all(q["type"] == "score" for q in questions.values()):
             return {name: {"type": "score", "score": 2} for name in questions}
         return {key: {"type": "choice", "choice": next(iter(questions[key]["criteria"]))}}
+
+
+class LockAwareChoice(Choice):
+    async def decide(self, state, questions):
+        self.states.append(state)
+        key = next(iter(questions))
+        if all(q["type"] == "score" for q in questions.values()):
+            return {name: {"type": "score", "score": 2} for name in questions}
+        criteria = questions[key]["criteria"]
+        available = [poi_id for poi_id, detail in criteria.items() if isinstance(detail, dict)]
+        locked = [poi_id for poi_id in available if criteria[poi_id]["is_locked"]]
+        return {key: {"type": "choice", "choice": (locked or available)[0]}}
 
 
 class PlaceCountTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
@@ -145,6 +157,149 @@ class PlaceCountTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
         self.main.extractor.extract.assert_not_called()
         self.main.router.route.assert_not_called()
 
+    async def test_add_one_stop_with_end_preference_uses_relative_count(self):
+        first = self.create("CITYWALK", 5)
+        self.main.extractor = FakeExtractor([PreferencePatch(
+            target_stops=1, end_with="公园", additional_requirements="最后适合散步消食",
+            routing_english="Add a stop and end somewhere suitable for a walk after a meal",
+        )])
+        self.main.router = FakeRouter(["CITYWALK"])
+        response = self.client.post("/api/v1/travel", json={
+            "trip_id": first["trip_id"], "state_version": 1,
+            "message": "加一个地点，再最后面好散步的，消消食",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["data"]
+        self.assertEqual(result["state_version"], 2)
+        self.assertEqual(len(result["places"]), 6)
+        state = self.trips.store.get(first["trip_id"]).state
+        self.assertEqual(state.target_stops, 6)
+        self.assertEqual(state.end_with, "公园")
+        self.assertIn("散步", state.additional_requirements)
+        self.assertEqual(len(self.trips.store.get_version(first["trip_id"], 1).latest_plan.places), 5)
+
+    async def test_shanghai_reduce_to_four_and_keep_two_named_places(self):
+        from langchain_core.runnables import RunnableLambda
+        search = self.places.search_around
+
+        async def named_search(*args, **kwargs):
+            places = await search(*args, **kwargs)
+            from dataclasses import replace
+            return [replace(p, name={"p2": "石藤咖啡(人民广场店)",
+                                     "p3": "百新书局"}.get(p.poi_id, p.name)) for p in places]
+
+        self.places.search_around = named_search
+        first = self.create("CITYWALK", 6)
+
+        class LLMWithChineseNames:
+            def with_structured_output(self, schema, *, include_raw=False):
+                return RunnableLambda(lambda messages: {"raw": None, "parsing_error": None, "parsed": {
+                    "target_stops": 4, "lock_place_names": ["石藤咖啡", "百新书局"],
+                    "routing_english": "Change the citywalk to 4 stops, keep 石藤咖啡 and 百新书局, and leave other preferences unchanged.",
+                }})
+
+        self.main.extractor = PreferenceExtractor(LLMWithChineseNames())
+        self.main.router = Mock()
+        from app.services.intent_router import RouteDecision
+        self.main.router.route = AsyncMock(return_value=RouteDecision("CITYWALK", 1.0))
+        self.children["CITYWALK"].jev = LockAwareChoice()
+        response = self.client.post("/api/v1/travel", json={
+            "trip_id": first["trip_id"], "state_version": 1,
+            "message": "改成4个地点吧，保留石藤咖啡和百新书局",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["data"]
+        self.assertEqual(len(result["places"]), 4)
+        self.assertTrue({"p2", "p3"}.issubset({p["poi"]["id"] for p in result["places"]}))
+        state = self.trips.store.get(first["trip_id"]).state
+        self.assertEqual(state.target_stops, 4)
+        self.assertEqual(set(state.locked_place_ids), {"p2", "p3"})
+        routed = self.main.router.route.await_args.args[0]
+        self.assertIn("4 stops", routed)
+        self.assertFalse(any("\u3400" <= ch <= "\u9fff" for ch in routed))
+
+    async def test_keep_all_existing_places_when_adding_one(self):
+        first = self.create("CITYWALK", 5)
+        original_ids = {place["poi"]["id"] for place in first["places"]}
+        # Jev 模拟会根据实际候选与剩余锁定地点做判断；不移除其他候选。
+        chooser = LockAwareChoice()
+        self.children["CITYWALK"].jev = chooser
+        # 即使模型没有列出旧地点，也应识别明确的“其他的点不变”。
+        self.main.extractor = FakeExtractor([PreferencePatch(
+            target_stops=1, end_with="公园", additional_requirements="适合饭后散步",
+            unlock_place_names=["地点1"],  # 模型误判解除锁定不能覆盖用户明确的整体保留。
+            routing_english="Add one stop for a walk and keep all existing stops",
+        )])
+        self.main.router = FakeRouter(["CITYWALK"])
+        response = self.client.post("/api/v1/travel", json={
+            "trip_id": first["trip_id"], "state_version": 1,
+            "message": "新增一个点，适合饭后散步，其他的点不变",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        updated = response.json()["data"]
+        self.assertEqual(len(updated["places"]), 6)
+        self.assertTrue(original_ids.issubset({place["poi"]["id"] for place in updated["places"]}))
+        state = self.trips.store.get(first["trip_id"]).state
+        self.assertEqual(state.target_stops, 6)
+        self.assertEqual(set(state.locked_place_ids), original_ids)
+        self.assertEqual(state.end_with, "公园")
+        self.assertEqual({item["id"] for item in chooser.states[0]["required_locked_places"]}, original_ids)
+
+    async def test_keep_all_uses_selected_historical_version(self):
+        first = self.create("CITYWALK", 5)
+        original_ids = {p["poi"]["id"] for p in first["places"]}
+        shortened = self.client.post("/api/v1/citywalk/plan", json={
+            "trip_id": first["trip_id"], "state_version": 1, "target_stops": 3,
+        })
+        self.assertEqual(shortened.status_code, 200, shortened.text)
+        self.children["CITYWALK"].jev = LockAwareChoice()
+        self.main.extractor = FakeExtractor([PreferencePatch(
+            routing_english="Keep all saved places and add one",
+        )])
+        self.main.router = FakeRouter(["CITYWALK"])
+        result = self.client.post("/api/v1/travel", json={
+            "trip_id": first["trip_id"], "state_version": 2, "base_version": 1,
+            "message": "新增一个点，其他的点不变",
+        })
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()["data"]["state_version"], 3)
+        self.assertEqual(len(result.json()["data"]["places"]), 6)
+        self.assertEqual(set(self.trips.store.get(first["trip_id"]).state.locked_place_ids), original_ids)
+
+    async def test_keep_all_in_other_subsystems(self):
+        for skill in ("ATTRACTION", "FOOD"):
+            with self.subTest(skill=skill):
+                first = self.create(skill, 5)
+                ids = {item["poi"]["id"] for item in first["places"]}
+                self.main.extractor = FakeExtractor([PreferencePatch(
+                    target_stops=1, limit=1, routing_english="Add one and keep existing places",
+                )])
+                self.main.router = FakeRouter([skill])
+                result = self.client.post("/api/v1/travel", json={
+                    "trip_id": first["trip_id"], "state_version": 1,
+                    "message": "新增一个点，其他的点不变",
+                })
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(len(result.json()["data"]["places"]), 6)
+                self.assertTrue(ids.issubset({p["poi"]["id"] for p in result.json()["data"]["places"]}))
+                self.assertEqual(set(self.trips.store.get(first["trip_id"]).state.locked_place_ids), ids)
+
+    async def test_model_can_request_bulk_keep_without_matching_literal_phrase(self):
+        first = self.create("CITYWALK", 5)
+        ids = {place["poi"]["id"] for place in first["places"]}
+        self.children["CITYWALK"].jev = LockAwareChoice()
+        self.main.extractor = FakeExtractor([PreferencePatch(
+            keep_all_previous_places=True, routing_english="Keep all existing places and add one",
+        )])
+        self.main.router = FakeRouter(["CITYWALK"])
+        response = self.client.post("/api/v1/travel", json={
+            "trip_id": first["trip_id"], "state_version": 1,
+            "message": "这些地方都留着，增加一个点",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(response.json()["data"]["places"]), 6)
+        self.assertEqual(set(self.trips.store.get(first["trip_id"]).state.locked_place_ids), ids)
+
     async def test_form_count_changes_use_same_trip_and_update_result(self):
         for skill in self.children:
             with self.subTest(skill=skill):
@@ -209,11 +364,16 @@ class PlaceCountTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(all(state.get("target_stops", state.get("target_count")) == 5 for state in choices))
 
     async def test_count_parser_does_not_confuse_time_distance_or_ambiguous_quantities(self):
-        for text in ("改成5小时", "改成5", "最多五个地点", "不要五个地点", "3个景点和2家餐厅", "3到5个地点", "上次去过五个地点，这次找餐厅"):
+        for text in ("改成5小时", "改成5", "最多五个地点", "不要五个地点", "3个景点和2家餐厅", "3到5个地点", "上次去过五个地点，这次找餐厅", "不新增一个地点", "今天3点出发"):
             with self.subTest(text=text):
                 self.assertIsNone(count_edit(text))
         self.assertEqual(count_edit("增加到五个地点").value, 5)
         self.assertEqual(count_edit("再加两个").delta, 1)
+        for text in ("加一个地点，再最后面好散步的，消消食", "加上一个地点", "多加一个地点", "新增一个点，适合饭后散步，其他的点不变"):
+            with self.subTest(text=text):
+                edit = count_edit(text)
+                self.assertEqual((edit.value, edit.delta), (1, 1))
+        self.assertEqual(count_edit("加到五个地点").delta, 0)
         self.assertEqual(count_edit("地点数量改成5").value, 5)
         self.assertTrue(count_edit("餐厅数量改为五").restaurant)
         self.assertFalse(count_edit("改成五家餐厅").applies_to("CITYWALK"))

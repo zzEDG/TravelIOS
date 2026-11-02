@@ -128,6 +128,25 @@ class CityWalkAgent(DiscoveryAgent):
         try:
             result = await self.resources.llm.with_structured_output(WalkSearchDraft).ainvoke(messages)
             values = WalkSearchDraft.model_validate(result).model_dump()
+            # 模型偶尔把 JSON 结尾引号带进明确指定的末站；仅当去掉多余符号后
+            # 与用户明确指定的词完全一致时恢复，不改变真实地点名称或类别。
+            model_end = values['end_with']
+            if request.end_with and model_end:
+                repaired = model_end.strip().strip("\"'“”‘’}")
+                if repaired == request.end_with:
+                    values['end_with'] = request.end_with
+            # 仅在模型自动补齐过长、且保留了用户原始顺序时，退回原始约束。
+            # 原始顺序本身超出目标时仍交给路线规划器报错，不擅自删减用户要求。
+            if target_stops is not None and request.visit_order:
+                generated = values['visit_order']
+                end = values['end_with']
+                def required_slots(order, last):
+                    return len(order) + bool(last) - bool(order and last and order[-1] == last)
+                if (required_slots(generated, end) > target_stops
+                        and required_slots(request.visit_order, request.end_with) <= target_stops
+                        and generated[:len(request.visit_order)] == request.visit_order
+                        and end == request.end_with):
+                    values['visit_order'] = list(request.visit_order)
             explicit = [*request.interests, *request.visit_order]
             if request.end_with and values["end_with"] == request.end_with:
                 explicit.append(request.end_with)
@@ -243,20 +262,29 @@ class CityWalkAgent(DiscoveryAgent):
                               avoid_commercial=state.avoid_commercial)
         profile = await self.parse_preferences(request, edits=state._walk_edits, target_stops=state.target_stops)
 
-        discovered = await self.prepare_candidates(
-            state,
-            searches={key: {"notes": state.additional_requirements, "dislikes": request.dislikes,
-                            "avoid_commercial": request.avoid_commercial,
-                            "category_description": description}
-                      for key, description in profile.keywords.items()},
-            radius=state.radius_meters, target_count=state.target_stops,
-            per_category_limit=max(3, state.search_limit), include_locked=True,
+        async def build_route():
+            discovered = await self.prepare_candidates(
+                state,
+                searches={key: {"notes": state.additional_requirements, "dislikes": request.dislikes,
+                                "avoid_commercial": request.avoid_commercial,
+                                "category_description": description}
+                          for key, description in profile.keywords.items()},
+                radius=state.radius_meters, target_count=state.target_stops,
+                per_category_limit=max(3, state.search_limit), include_locked=True,
+            )
+            planner = CityWalkRoutePlanner(
+                route=self.route, choose=self.choose, shortlist=self.shortlist,
+                translator=self.translator, planned_place=self.planned_place,
+            )
+            return await planner.plan(state, request, profile, discovered)
+
+        # 天气和图片不依赖候选搜索或选点，与整条路线规划并发。
+        route_result, (weather, notice), cover = await gather_results(
+            build_route(),
+            self.weather_service.lookup(state.current_location, request.visit_date),
+            self._cover('city walk '+ ' '.join(profile.keywords.values())[:180]),
         )
-        planner = CityWalkRoutePlanner(
-            route=self.route, choose=self.choose, shortlist=self.shortlist,
-            translator=self.translator, planned_place=self.planned_place,
-        )
-        places, segments, minutes, meters, notes, rate_limited = await planner.plan(state, request, profile, discovered)
+        places, segments, minutes, meters, notes, rate_limited = route_result
         plan = CityWalkPlanData(trip_id=state.trip_id, state_version=state.state_version,
                                 title=f'{request.city} · {request.theme}',
                                 summary=f'按偏好逐站安排{len(places)}个真实地点，预计步行{minutes}分钟（不含停留）。',
@@ -266,10 +294,6 @@ class CityWalkAgent(DiscoveryAgent):
                                 duration_semantics="WALKING_ONLY",
                                 warning_codes=["AMAP_RATE_LIMIT"] if rate_limited else [])
 
-        (weather, notice), cover = await gather_results(
-            self.weather_service.lookup(plan.origin, request.visit_date),
-            self._cover('city walk '+ ' '.join(profile.keywords.values())[:180]),
-        )
         plan.weather, plan.cover = weather, cover
         if weather is None:
             plan.notes.append(notice or '所选日期暂无可用天气预报，请出发前再查询。')

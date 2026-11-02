@@ -106,37 +106,69 @@ class AsyncExecutionTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCas
         self.assertEqual(maximum, 4)
         self.assertEqual(active, 0)
 
-    async def test_citywalk_weather_and_cover_overlap_after_route_selection(self):
+    async def test_citywalk_route_weather_and_cover_overlap(self):
         agent, _ = test_citywalk.CityWalkTests().make_agent()
         entered, release = set(), asyncio.Event()
 
         async def enter(name):
             entered.add(name)
-            if len(entered) == 2:
+            if len(entered) == 3:
                 release.set()
             await release.wait()
 
-        async def weather(*args):
+        async def weather(location, visit_date):
             await enter('weather')
             return None, '离线无天气'
 
-        async def cover(*args):
+        async def cover(query):
             await enter('cover')
             return None
 
         async def route(*args):
+            await enter('route')
             return WalkingRoute(100, 2, None)
 
         agent.weather_service.lookup = weather
         agent.unsplash.cover = cover
         agent.amap.walking_route = route
-        from app.models.walk import WalkRequest
-        result = await asyncio.wait_for(agent.plan_legacy(
-            WalkRequest(city='上海', theme='建筑与咖啡'),
-            origin_coordinates=(121.47, 31.23), target_stops=2, describe=False,
-        ), 2)
-        self.assertEqual(len(result.legs), 2)
-        self.assertEqual(entered, {'weather','cover'})
+        trip = state('CITYWALK')
+        result = await asyncio.wait_for(agent.execute(trip), 2)
+        self.assertEqual(len(result.places), 2)
+        self.assertEqual(entered, {'route', 'weather', 'cover'})
+        self.assertIsNone(result.weather)
+        self.assertIsNone(result.cover)
+        self.assertIn('离线无天气', result.notes)
+
+    async def test_citywalk_route_failure_cancels_weather_and_cover(self):
+        agent, _ = test_citywalk.CityWalkTests().make_agent()
+        started, cleaned = set(), set()
+        ready = asyncio.Event()
+
+        async def pending(name):
+            started.add(name)
+            if len(started) == 2:
+                ready.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cleaned.add(name)
+
+        async def weather(*args):
+            return await pending('weather')
+
+        async def cover(*args):
+            return await pending('cover')
+
+        async def failed_search(*args, **kwargs):
+            await ready.wait()
+            raise ValueError('搜索失败')
+
+        agent.weather_service.lookup = weather
+        agent.unsplash.cover = cover
+        agent.prepare_candidates = failed_search
+        with self.assertRaisesRegex(ValueError, '搜索失败'):
+            await asyncio.wait_for(agent.execute(state('CITYWALK')), 2)
+        self.assertEqual(cleaned, {'weather', 'cover'})
 
     async def test_failure_cancels_siblings_before_closing_clients(self):
         started, cleaned = asyncio.Event(), asyncio.Event()

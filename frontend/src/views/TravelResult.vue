@@ -44,7 +44,7 @@
               <a :href="place.poi.source_url || poiUrl(place.poi)" target="_blank" rel="noopener noreferrer">在高德查看地点 ↗</a><p v-if="place.poi.retrieved_at" class="muted">来源：高德 · {{ new Date(place.poi.retrieved_at).toLocaleString() }}</p>
             </article>
           </a-card>
-          <a-card :bordered="false" class="travel-card"><h2>地点分布</h2><img v-if="!mapFailed" :key="mapPoints" :src="mapImageUrl(mapPoints)" class="map-image" alt="起点与推荐地点分布" @error="mapFailed=true" /><a-empty v-else description="地图暂不可用，请使用地点链接" /><p class="muted">{{ food || attraction ? '地图展示起点与推荐地点的位置。' : '这是地点分布图；步行路线以每段的高德规划结果为准。' }}</p></a-card>
+          <a-card :bordered="false" class="travel-card"><h2>地点分布</h2><template v-if="mapGroups.length"><p v-if="mapGroups.length > 1" class="muted">第 {{ mapPage }} / {{ mapGroups.length }} 组，展示第 {{ (mapPage - 1) * 5 + 1 }}–{{ Math.min(mapPage * 5, plan.places.length) }} 个地点；每组均包含起点，地点编号与列表一致。</p><img v-if="!mapFailed" :key="mapPoints" :src="mapImageUrl(mapPoints, (mapPage - 1) * 5 + 1)" class="map-image" alt="起点与推荐地点分布" @error="mapFailed=true; showError('地图加载失败，请稍后重试或使用地点链接查看。')" /><a-empty v-else description="地图暂不可用，请使用地点链接" /><a-pagination v-if="mapGroups.length > 1" v-model:current="mapPage" :total="mapGroups.length" :page-size="1" :show-size-changer="false" size="small" /></template><a-empty v-else description="暂无地点可展示" /><p class="muted">{{ food || attraction ? '地图展示起点与推荐地点的位置。' : '这是地点分布图；步行路线以每段的高德规划结果为准。' }}</p></a-card>
         </section>
         <aside>
           <a-card :bordered="false" class="travel-card"><h2>继续调整</h2><p class="muted">载入这个版本的偏好修改；对话也可以切换到另外一个目标。保存后保留旧版本。</p><a-button block :disabled="busy" @click="router.push({name:ROUTE_NAMES.HOME,query:{trip:plan.trip_id,version:plan.state_version}})">载入这个版本修改</a-button>
@@ -62,6 +62,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import { showError } from '@/api/error-dialog'
 import { ROUTE_NAMES } from '@/config/routes'
 import PlanHistory from '@/components/PlanHistory.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
@@ -74,11 +75,21 @@ import type { Snapshot, Meta, TravelPlan } from '@/types/travel'
 const route=useRoute(),router=useRouter(), snapshot=ref<Snapshot | null>(null),meta=ref<Meta | null>(null)
 const busy=ref(false),error=ref(''),text=ref(''),clarification=ref(''),pending=ref(''),mapFailed=ref(false)
 const historyRefresh=ref(0)
+watch(error, value => { if (value) showError(value) })
 let loadId=0
 const plan=computed(()=>snapshot.value!.latest_plan),food=computed(()=>snapshot.value?.latest_plan.routed_skill==='FOOD')
 const attraction=computed(()=>snapshot.value?.latest_plan.routed_skill==='ATTRACTION')
 const requestedCount=computed(()=>snapshot.value ? (food.value ? snapshot.value.state.food_limit : snapshot.value.state.target_stops) : 0)
-const mapPoints=computed(()=>snapshot.value ? [plan.value.origin,...plan.value.places.map(p=>p.poi.location)].map(p=>p.longitude+','+p.latitude).join(';') : '')
+const mapPage=ref(1)
+const mapGroups=computed(()=> {
+  if (!snapshot.value) return []
+  const places=plan.value.places
+  return Array.from({length:Math.ceil(places.length / 5)}, (_, index) =>
+    [plan.value.origin, ...places.slice(index * 5, (index + 1) * 5).map(p=>p.poi.location)]
+      .map(p=>p.longitude.toFixed(6)+','+p.latitude.toFixed(6)).join(';'))
+})
+const mapPoints=computed(()=>mapGroups.value[mapPage.value-1] || '')
+watch(mapPage,()=>{mapFailed.value=false})
 async function load() {
   const id=++loadId
   busy.value=true;error.value=''
@@ -87,7 +98,7 @@ async function load() {
     if(version !== undefined && (!Number.isInteger(version) || version < 1)) throw new Error('规划版本无效')
     const response=await getTrip(String(route.params.id),version)
     if(id !== loadId) return
-    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);mapFailed.value=false
+    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);mapPage.value=1;mapFailed.value=false
   } catch(e) {if(id===loadId) error.value=e instanceof Error ? e.message : '读取失败'} finally {if(id===loadId) busy.value=false}
 }
 watch(()=>[route.params.id,route.query.version],()=>{snapshot.value=null;clarification.value='';pending.value='';text.value='';load()},{immediate:true})
@@ -105,7 +116,7 @@ async function send() {
     let restored
     try { restored=await getTrip(response.data.trip_id) }
     catch { throw new Error('行程已保存，但读取新结果失败。请点击“刷新已保存行程”后继续修改') }
-    snapshot.value=restored.data;meta.value=response.meta;mapFailed.value=false;clarification.value='';pending.value='';text.value=''
+    snapshot.value=restored.data;meta.value=response.meta;mapPage.value=1;mapFailed.value=false;clarification.value='';pending.value='';text.value=''
     historyRefresh.value++
     await router.replace({name:ROUTE_NAMES.TRIP_DETAIL,params:{id:response.data.trip_id}})
   } catch(e) {

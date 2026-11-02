@@ -6,6 +6,7 @@ from functools import cached_property
 import httpx
 
 from app.config import get_settings
+from app.diagnostics import DiagnosticAsyncClient, DiagnosticClient
 from app.integrations.amap_service import AmapService
 from app.integrations.jev_service import JevService
 from app.integrations.jev_translation import JevTranslation
@@ -24,9 +25,9 @@ class ServiceResources(AsyncExitStack):
         super().__init__()
         self.provider = provider
 
-    def _client(self, timeout=15, *, trust_env=True):
-        client = httpx.AsyncClient(
-            timeout=timeout,
+    def _client(self, timeout=15, *, trust_env=True, service="external"):
+        client = DiagnosticAsyncClient(
+            service=service, timeout=timeout,
             trust_env=trust_env,
             limits=httpx.Limits(max_connections=8, max_keepalive_connections=8),
         )
@@ -35,18 +36,18 @@ class ServiceResources(AsyncExitStack):
 
     @cached_property
     def amap(self) -> AmapService:
-        return AmapService(get_settings().amap_api_key, self._client(trust_env=False))
+        return AmapService(get_settings().amap_api_key, self._client(trust_env=False, service="amap"))
 
     @cached_property
     def jev(self) -> JevService:
-        return JevService(self._client())
+        return JevService(self._client(service="jev"))
 
     @cached_property
     def llm(self):
         trust_env = llm_trust_env(self.provider)
-        options = {"http_async_client": self._client(timeout=35, trust_env=trust_env)}
+        options = {"http_async_client": self._client(timeout=35, trust_env=trust_env, service="llm")}
         if not trust_env:
-            client = httpx.Client(timeout=35, trust_env=False)
+            client = DiagnosticClient(service="llm", timeout=35, trust_env=False)
             self.callback(client.close)
             options["http_client"] = client
         return get_llm(provider=self.provider, **options)
@@ -61,11 +62,11 @@ class ServiceResources(AsyncExitStack):
 
     @cached_property
     def weather(self) -> QWeatherService:
-        return QWeatherService(client=self._client(timeout=12, trust_env=False))
+        return QWeatherService(client=self._client(timeout=12, trust_env=False, service="qweather"))
 
     @cached_property
     def unsplash(self) -> UnsplashService:
-        return UnsplashService(get_settings().unsplash_access_key, self._client())
+        return UnsplashService(get_settings().unsplash_access_key, self._client(service="unsplash"))
 
     @cached_property
     def extractor(self) -> PreferenceExtractor:

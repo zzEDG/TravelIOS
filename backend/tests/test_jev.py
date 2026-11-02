@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.models.walk import WalkRequest  # noqa: E402
 from app.integrations.amap_service import Place  # noqa: E402
-from app.integrations.jev_service import JevService  # noqa: E402
+from app.integrations.jev_service import JevService, JevServiceError  # noqa: E402
 from app.integrations.jev_translation import JevTranslation  # noqa: E402
 
 
@@ -76,6 +76,65 @@ class JevTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}):
             with self.assertRaisesRegex(ValueError, "OPENROUTER_API_KEY"):
                 await JevService().decide({}, {"pick": {"type": "choice"}})
+
+    async def test_invalid_responses_retry_and_preserve_same_request(self):
+        cases = [
+            (httpx.Response(200, content=b"not json"), {"pick": {"type": "choice", "criteria": {"p1": "Place"}}}, {"pick": {"type": "choice", "choice": "p1"}}),
+            (httpx.Response(200, json={"answers": {}}), {"pick": {"type": "choice", "criteria": {"p1": "Place"}}}, {"pick": {"type": "choice", "choice": "p1"}}),
+            (httpx.Response(200, json={"answers": {"pick": {"type": "choice", "choice": "invented"}}}), {"pick": {"type": "choice", "criteria": {"p1": "Place"}}}, {"pick": {"type": "choice", "choice": "p1"}}),
+            (httpx.Response(200, json={"answers": {"p1": {"type": "score", "score": "bad"}}}), {"p1": {"type": "score", "criteria": ["bad", "good", "excellent"]}}, {"p1": {"type": "score", "score": 2}}),
+            (httpx.Response(200, json={"answers": {"travel_skill": {"type": "choice", "choice": "CITYWALK", "confidence": 2}}}), {"travel_skill": {"type": "choice", "criteria": {"CITYWALK": "Walk"}}}, {"travel_skill": {"type": "choice", "choice": "CITYWALK", "confidence": 0.8}}),
+        ]
+        for invalid, questions, valid in cases:
+            with self.subTest(questions=questions, invalid=invalid.content):
+                requests = []
+                def respond(request):
+                    requests.append(json.loads(request.content))
+                    return invalid if len(requests) == 1 else httpx.Response(200, json={"answers": valid})
+                async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+                    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), patch("app.integrations.jev_service.asyncio.sleep"):
+                        answers = await JevService(client).decide({"context": "test"}, questions)
+                self.assertEqual(answers, valid)
+                self.assertEqual(len(requests), 2)
+                self.assertEqual(requests[0], requests[1])
+
+    async def test_timeout_retries_then_succeeds(self):
+        attempts = []
+        def respond(request):
+            attempts.append(request)
+            if len(attempts) < 3:
+                raise httpx.ReadTimeout("timed out", request=request)
+            return httpx.Response(200, json={"answers": {"pick": {"type": "choice", "choice": "p1"}}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), patch("app.integrations.jev_service.asyncio.sleep") as sleep:
+                result = await JevService(client).decide({}, {"pick": {"type": "choice", "criteria": {"p1": "Place"}}})
+        self.assertEqual(result["pick"]["choice"], "p1")
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(sleep.await_count, 2)
+
+    async def test_exhaustion_reports_reason_and_auth_does_not_retry(self):
+        for status, expected, count in ((503, "已尝试 3 次", 3), (401, "API Key", 1), (402, "余额不足", 1), (422, "请求格式无效", 1)):
+            with self.subTest(status=status):
+                requests = []
+                def respond(request):
+                    requests.append(request)
+                    return httpx.Response(status, json={})
+                async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+                    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), patch("app.integrations.jev_service.asyncio.sleep"):
+                        with self.assertRaisesRegex(JevServiceError, expected):
+                            await JevService(client).decide({}, {"pick": {"type": "choice", "criteria": {"p1": "Place"}}})
+                self.assertEqual(len(requests), count)
+
+    async def test_repeated_invalid_choice_never_accepted(self):
+        requests = []
+        def respond(request):
+            requests.append(request)
+            return httpx.Response(200, json={"answers": {"pick": {"type": "choice", "choice": "invented"}}})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), patch("app.integrations.jev_service.asyncio.sleep"):
+                with self.assertRaisesRegex(JevServiceError, "已尝试 3 次.*候选范围外"):
+                    await JevService(client).decide({}, {"pick": {"type": "choice", "criteria": {"p1": "Place"}}})
+        self.assertEqual(len(requests), 3)
 
     async def test_translation_preserves_ids_and_rejects_chinese_leak(self):
         llm = FakeLLM([

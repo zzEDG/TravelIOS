@@ -34,7 +34,7 @@
           </template>
           <template v-if="mode === 'CITYWALK' || mode === 'ATTRACTION'">
             <a-row :gutter="20"><a-col :xs="24" :md="8"><a-form-item :label="mode === 'ATTRACTION' ? '可用时长（小时，供推荐参考）' : '可用时长（小时）'"><a-input-number v-model:value="form.available_hours" :min="mode === 'CITYWALK' ? 2 : 0.5" :max="mode === 'CITYWALK' ? 8 : 12" :step="mode === 'CITYWALK' ? 1 : 0.5" :disabled="busy" /></a-form-item></a-col>
-              <a-col :xs="24" :md="8"><a-form-item label="目标地点数"><a-input-number v-model:value="form.target_stops" :min="mode === 'CITYWALK' ? 2 : 1" :max="5" :disabled="busy" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="目标地点数"><a-input-number v-model:value="form.target_stops" :min="mode === 'CITYWALK' ? 2 : 1" :max="mode === 'CITYWALK' ? 10 : 100" :precision="0" :disabled="busy" /></a-form-item></a-col>
               <a-col v-if="mode === 'CITYWALK'" :xs="24" :md="8"><a-form-item label="总步行上限（米，可留空）"><a-input-number v-model:value="form.max_walking_meters" :min="mode === 'CITYWALK' ? 500 : 100" :max="30000" :disabled="busy" /></a-form-item></a-col></a-row>
             <a-form-item :label="mode === 'CITYWALK' ? '想去的地方（重要的放前面，用逗号分隔）' : '兴趣（用逗号分隔）'"><a-input v-model:value="form.interests" placeholder="公园，咖啡馆，书店" :disabled="busy" /></a-form-item>
             <a-form-item label="不喜欢（用逗号分隔）"><a-input v-model:value="form.dislikes" :disabled="busy" /></a-form-item>
@@ -68,6 +68,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import { showError } from '@/api/error-dialog'
 import { ROUTE_NAMES } from '@/config/routes'
 import PlanHistory from '@/components/PlanHistory.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
@@ -78,6 +79,7 @@ import type { Skill, Snapshot, LocationMatch } from '@/types/travel'
 const route = useRoute(), router = useRouter()
 const mode = ref<Skill | 'CHAT'>('CITYWALK'), busy = ref(false), error = ref(''), chat = ref(''), clarification = ref('')
 const lastId = ref(lastTrip()), snapshot = ref<Snapshot | null>(null), pendingQuestion = ref('')
+watch(error, value => { if (value) showError(value) })
 const editReload=ref(0)
 const startText=ref(''), searching=ref(false), matches=ref<LocationMatch[]>([]), selectedOrigin=ref<LocationMatch | null>(null)
 const meals = [{value:'breakfast',label:'早餐'},{value:'lunch',label:'午餐'},{value:'dinner',label:'晚餐'},{value:'snack',label:'小吃'}]
@@ -138,6 +140,8 @@ async function submit() {
       Object.assign(payload,{center_location:location,meal_type:form.meal_type,cuisine_preference:list(form.cuisine_preference),avoid:list(form.food_avoid),max_distance_meters:form.max_distance_meters,limit:form.food_limit})
     } else {
       if(form.available_hours==null || form.target_stops==null) throw new Error('请填写时长和地点数')
+      const minStops = mode.value === 'CITYWALK' ? 2 : 1, maxStops = mode.value === 'CITYWALK' ? 10 : 100
+      if (!Number.isInteger(form.target_stops) || form.target_stops < minStops || form.target_stops > maxStops) throw new Error(`目标地点数需为 ${minStops} 到 ${maxStops} 的整数`) 
       Object.assign(payload,{available_hours:form.available_hours,target_stops:form.target_stops,max_walking_meters:mode.value === 'CITYWALK' ? form.max_walking_meters : null,interests:list(form.interests),dislikes:list(form.dislikes),travel_date:form.travel_date || null})
       if(mode.value==='CITYWALK') {
         if(!form.interests.trim() && !form.additional_requirements.trim() && !form.visit_order.trim() && !form.end_with.trim()) throw new Error('请填写想去的地方或补充要求')

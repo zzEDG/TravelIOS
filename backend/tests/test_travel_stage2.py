@@ -183,18 +183,18 @@ class Stage2Tests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
 
     async def test_extractor_and_router_validate_model_output(self):
         class FakeLLM:
-            def with_structured_output(self, schema):
-                return RunnableLambda(lambda messages: schema.model_validate({
+            def with_structured_output(self, schema, *, include_raw=False):
+                return RunnableLambda(lambda messages: {"raw": None, "parsing_error": None, "parsed": {
                     "theme": "建筑与咖啡",
                     "routing_english": "Continue an architecture and coffee walk",
-                }))
+                }})
         patch_value = await PreferenceExtractor(FakeLLM()).extract("去看老建筑", None)
         self.assertEqual(patch_value.theme, "建筑与咖啡")
         self.assertIsNone(patch_value.available_hours)
 
         class BadLLM:
-            def with_structured_output(self, schema):
-                return RunnableLambda(lambda messages: schema.model_validate({"routing_english": "去看看"}))
+            def with_structured_output(self, schema, *, include_raw=False):
+                return RunnableLambda(lambda messages: {"raw": None, "parsing_error": None, "parsed": {"routing_english": "去看看"}})
         with self.assertRaises(PreferenceExtractionError):
             await PreferenceExtractor(BadLLM()).extract("去看看", None)
 

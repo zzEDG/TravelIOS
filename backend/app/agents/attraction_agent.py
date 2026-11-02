@@ -2,6 +2,7 @@
 
 from app.models.travel import AttractionPlanData, AttractionPlanRequest, TripState
 from app.agents.discovery import DiscoveryAgent
+from app.concurrency import gather_results
 
 
 class AttractionAgent(DiscoveryAgent):
@@ -27,16 +28,19 @@ class AttractionAgent(DiscoveryAgent):
 
     async def execute(self, state: TripState) -> AttractionPlanData:
         locked = self.locked_recommendations(state, state.radius_meters)
-        result = await self.prepare_candidates(
-            state, searches={key: {"notes": state.additional_requirements, **self.selection_preferences(state)}
+        selection = self.prepare_recommendations(
+            state, locked=locked, searches={key: {"notes": state.additional_requirements, **self.selection_preferences(state)}
                              for key in (state.interests or ["景点"])[:3]},
             radius=state.radius_meters, target_count=state.target_stops,
             types="110000|140100|140200|140400|140600|140700",
         )
-        places = await self.complete_recommendations(state, result.places, state.target_stops, locked)
         weather, weather_notice = None, None
         if state.consider_weather:
-            weather, weather_notice = await self.weather_service.lookup(state.current_location, state.travel_date)
+            (result, places), (weather, weather_notice) = await gather_results(
+                selection, self.weather_service.lookup(state.current_location, state.travel_date),
+            )
+        else:
+            result, places = await selection
         notes = ["距离为各景点到同一起点的直线距离。",
                  "未核验开放时间、预约和票价。"]
         if locked:

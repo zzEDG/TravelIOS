@@ -8,7 +8,7 @@ Vue 3 + TypeScript + Ant Design Vue，保留原有绿色卡片布局，无新增
 - 结果页“历次修改”显示已保存版本；保存修改时提交当前最新 state_version 与所选 base_version，新结果生成新版本，旧快照保留。可以基于旧版本重新规划，冲突返回409并提示重新载入。
 - 首页 /：城市漫步、景点游览、餐厅推荐三个表单，分别请求 POST /api/v1/citywalk/plan、/attraction/plan、/food/search。第四个Tab“对话规划”请求 /api/v1/travel。
 - 起点输入城市与地名/地址，例如人民广场地铁站。点击“搜索起点”，通过 /api/v1/locations/search 返回候选，核对名称/地址后选择；程序自动取得GCJ-02坐标。没有默认坐标，也不会自动获取用户位置。修改城市或位置文本会清除旧选择。日期可选。起点名称随行程保存和回填，旧数据沿用已保存坐标。
-- 结果页 /trips/:id：用 GET /api/v1/trips/{id} 读取后端SQLite中的结果；刷新页面也能恢复。展示地点、路段、来源链接、估计停留、可用天气与缺失提示。
+- 结果页 /trips/:id：用 GET /api/v1/trips/{id} 读取后端 PostgreSQL 中的结果；刷新页面也能恢复。展示地点、路段、来源链接、估计停留、可用天气与缺失提示。
 - Food展示独立备选，每家从起点出发，不显示累计时长或串联总距离；CityWalk/Attraction显示游览顺序及可用总距离。
 - “载入这个版本修改”回到 /?trip=...&version=...，读取指定状态并回填表单。同一能力提交trip_id/state_version/base_version，成功后递增版本；切换表单能力明确新建行程，想沿用原trip_id则使用对话切换。
 - 结果页对话使用当前trip_id/state_version，不成功就保留原结果。CLARIFY展示问题，下一轮携带之前需求和澄清问题；成功后刷新保存的状态。
@@ -42,7 +42,7 @@ backend/app/controllers/maps.py：地图响应；services/map_service.py：地�
     nvm use 22
     npm run dev -- --host 127.0.0.1
 
-调试链路：Home.submit / TravelResult.send → api/travel.ts → FastAPI对应端点 → MainAgent → 子 Agent → TripService → SQLite → GET恢复 → Vue响应式渲染。浏览器Network面板观察请求字段、trip_id、state_version和错误码。
+调试链路：Home.submit / TravelResult.send → api/travel.ts → FastAPI对应端点 → MainAgent → 子 Agent → TripService → PostgreSQL → GET恢复 → Vue响应式渲染。浏览器Network面板观察请求字段、trip_id、state_version和错误码。
 
 ## 规划历史验证（2026-10-12）
 

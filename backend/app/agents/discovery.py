@@ -58,9 +58,6 @@ class DiscoveryAgent(SubAgent):
                 if self.name == "FOOD":
                     correct_type = place.typecode.startswith("05") if place.typecode else any(
                         word in place.category for word in ("餐饮", "餐厅"))
-                elif self.name == "ATTRACTION":
-                    correct_type = place.typecode.startswith(("11", "1401", "1402", "1404", "1406", "1407")) if place.typecode else any(
-                        word in place.category for word in ("风景", "博物馆", "美术馆", "展览", "科技馆", "天文馆"))
                 else:
                     correct_type = True
                 if correct_type:
@@ -138,12 +135,34 @@ class DiscoveryAgent(SubAgent):
             }))
         return locked
 
-    async def complete_recommendations(self, state, candidates, target_count, locked):
+    async def prepare_recommendations(self, state, *, locked, target_count, **search_options):
+        """Overlap preference translation with search and subsequent place translation."""
+        async def search_and_translate():
+            result = await self.prepare_candidates(state, target_count=target_count, **search_options)
+            locked_ids = {place.poi.id for place in locked}
+            remaining = [place for place in result.places if place.poi_id not in locked_ids]
+            translations = await self.translator.places(remaining) if remaining else {}
+            return result, translations
+
+        if len(locked) < target_count:
+            english, (result, translations) = await gather_results(
+                self.english(state), search_and_translate(),
+            )
+            prepared = (english, translations)
+        else:
+            result = await self.prepare_candidates(state, target_count=target_count, **search_options)
+            prepared = None
+        places = await self.complete_recommendations(
+            state, result.places, target_count, locked, prepared=prepared,
+        )
+        return result, places
+
+    async def complete_recommendations(self, state, candidates, target_count, locked, *, prepared=None):
         ids = {place.poi.id for place in locked}
         remaining = [place for place in candidates if place.poi_id not in ids]
         slots = target_count - len(locked)
         if slots and remaining:
-            extra = await self.recommend(state, remaining, slots, allow_empty=bool(locked))
+            extra = await self.recommend(state, remaining, slots, allow_empty=bool(locked), prepared=prepared)
         else:
             extra = []
         places = locked + extra
@@ -151,10 +170,13 @@ class DiscoveryAgent(SubAgent):
             place.step_order = index
         return places
 
-    async def recommend(self, state, candidates, target_count, *, allow_empty=False):
-        english, translations = await gather_results(
-            self.english(state), self.translator.places(candidates),
-        )
+    async def recommend(self, state, candidates, target_count, *, allow_empty=False, prepared=None):
+        if prepared is None:
+            english, translations = await gather_results(
+                self.english(state), self.translator.places(candidates),
+            )
+        else:
+            english, translations = prepared
         origin = self.origin(state)
         distances = {p.poi_id: round(distance_m(origin, p)) for p in candidates}
         answers = await self.jev.decide(

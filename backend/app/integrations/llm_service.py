@@ -9,6 +9,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_deepseek import ChatDeepSeek
 from langchain_openai import ChatOpenAI
 
+# OpenAI SDK 自动退避和处理 Retry-After：首次请求 + 两次重试。
+LLM_MAX_RETRIES = 2
+
 
 def available_models():
     return [
@@ -59,7 +62,7 @@ def get_llm(*, provider="default", http_async_client=None, http_client=None) -> 
                 model=os.getenv("MOONSHOT_MODEL_ID") or "kimi-k2.6",
                 temperature=0.6,
                 extra_body={"thinking": {"type": "disabled"}},
-                timeout=35, max_retries=1, **client_options,
+                timeout=35, max_retries=LLM_MAX_RETRIES, **client_options,
             )
     if provider == "deepseek":
         explicit_key = None
@@ -71,7 +74,7 @@ def get_llm(*, provider="default", http_async_client=None, http_client=None) -> 
             base_url=base_url,
             model=model or ("deepseek-chat" if base_url and "deepseek" in base_url else "gpt-4o-mini"),
             timeout=35,
-            max_retries=1,
+            max_retries=LLM_MAX_RETRIES,
             **client_options,
         )
     if deepseek_key:
@@ -79,7 +82,7 @@ def get_llm(*, provider="default", http_async_client=None, http_client=None) -> 
             api_key=deepseek_key,
             model=model or "deepseek-chat",
             timeout=35,
-            max_retries=1,
+            max_retries=LLM_MAX_RETRIES,
             **client_options,
         )
     raise ValueError("请设置 DEEPSEEK_API_KEY、LLM_API_KEY 或 OPENAI_API_KEY")

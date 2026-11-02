@@ -107,6 +107,32 @@ class WalkStructuredOutputTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result.end_with)
         self.assertNotIn('陕西饭店',result.keywords)
 
+    async def test_stray_quote_on_explicit_end_is_repaired(self):
+        output = draft()
+        output['end_with'] = '陕西饭店"}'
+        result = await preference_agent(self.model(output)).parse_preferences(form(), target_stops=4)
+        self.assertEqual(result.end_with, '陕西饭店')
+        self.assertIn('陕西饭店', result.keywords)
+
+    async def test_different_end_is_not_silently_replaced(self):
+        output = draft()
+        output['end_with'] = '公园"'
+        with self.assertRaises(PreferenceExtractionError):
+            await preference_agent(self.model(output)).parse_preferences(form(), target_stops=4)
+
+    async def test_overlong_generated_order_preserves_original_explicit_order(self):
+        output = draft()
+        output['visit_order'] = ['咖啡店', '步行街', '公园', '咖啡店', '公园']
+        result = await preference_agent(self.model(output)).parse_preferences(form(), target_stops=4)
+        self.assertEqual(result.visit_order, ['咖啡店', '步行街', '公园'])
+        self.assertEqual(result.end_with, '陕西饭店')
+
+    async def test_original_overlong_order_is_not_silently_trimmed(self):
+        request = form()
+        result = await preference_agent(self.model(draft())).parse_preferences(request, target_stops=3)
+        self.assertEqual(result.visit_order, request.visit_order)
+        self.assertEqual(result.end_with, request.end_with)
+
     async def test_transport_failure_is_not_retried_as_a_schema_failure(self):
         failure=APIConnectionError(request=httpx.Request('POST','https://example.com'))
         planner=preference_agent(self.model(failure))

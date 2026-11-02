@@ -11,7 +11,8 @@ from app.integrations.amap_service import AmapService
 from app.models.travel import (
     GeoLocation, PlanData, TravelRequest, TripHistoryPage, TripSnapshot, TripState,
 )
-from app.models.trip_store import TripRecord, TripStore, TripVersionConflictError
+from app.models.trip_store import TripRecord, TripVersionConflictError
+from app.models.postgres_trip_store import PostgresTripStore as TripStore
 
 if TYPE_CHECKING:
     from app.agents.base import PlanningRequest, SubAgent
@@ -144,3 +145,6 @@ class TripService:
         record = self.store.get_version(trip_id, version) if version is not None else latest
         return TripSnapshot(state=record.state, latest_plan=record.latest_plan,
                             latest_version=latest.state.state_version)
+
+    def delete_trip(self, trip_id: str) -> None:
+        self.store.delete(trip_id)

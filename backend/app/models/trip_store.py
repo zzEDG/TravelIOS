@@ -34,7 +34,8 @@ class TripRecord:
 
 
 class TripStore:
-    def __init__(self, path: Path | str = DEFAULT_DB_PATH):
+    def __init__(self, path: Path | str = DEFAULT_DB_PATH, *, user_id=None):
+        self.user_id = str(user_id) if user_id is not None else None
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
@@ -46,9 +47,11 @@ class TripStore:
                     plan_json TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL, user_id TEXT
                 )
             """)
+            if "user_id" not in {row[1] for row in conn.execute("PRAGMA table_info(trips)")}:
+                conn.execute("ALTER TABLE trips ADD COLUMN user_id TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trips_expires_at ON trips(expires_at)")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS trip_history (
@@ -93,7 +96,7 @@ class TripStore:
 
     def get(self, trip_id: str, *, allow_expired: bool = False) -> TripRecord:
         with self._connect() as conn:
-            row = conn.execute("SELECT * FROM trips WHERE trip_id = ?", (trip_id,)).fetchone()
+            row = conn.execute("SELECT * FROM trips WHERE trip_id = ? AND user_id IS ?", (trip_id, self.user_id)).fetchone()
         if row is None:
             raise TripNotFoundError("行程不存在")
         record = self._record(row)
@@ -104,8 +107,8 @@ class TripStore:
     def get_version(self, trip_id: str, version: int) -> TripRecord:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM trip_history WHERE trip_id = ? AND version = ?",
-                (trip_id, version),
+                "SELECT h.* FROM trip_history h JOIN trips t ON t.trip_id=h.trip_id WHERE h.trip_id = ? AND h.version = ? AND t.user_id IS ?",
+                (trip_id, version, self.user_id),
             ).fetchone()
         if row is None:
             raise TripNotFoundError("这个规划版本不存在")
@@ -116,11 +119,12 @@ class TripStore:
         """从所选版本及以前的漫步历史恢复旧地点的真实检索来源。"""
         if not poi_ids:
             return {}
+        self.get(trip_id, allow_expired=True)
         found = {}
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT plan_json FROM trip_history WHERE trip_id = ? AND skill = ? AND version <= ? "
-                "ORDER BY version DESC", (trip_id, "CITYWALK", through_version),
+                "SELECT h.plan_json FROM trip_history h JOIN trips t ON t.trip_id=h.trip_id WHERE h.trip_id = ? AND h.skill = ? AND h.version <= ? "
+                "AND t.user_id IS ? ORDER BY h.version DESC", (trip_id, "CITYWALK", through_version, self.user_id),
             )
             for row in rows:
                 plan = TypeAdapter(PlanData).validate_json(row["plan_json"])
@@ -145,8 +149,9 @@ class TripStore:
 
     def history(self, *, skill: str | None = None, query: str = "", page: int = 1,
                 page_size: int = 5, trip_id: str | None = None) -> TripHistoryPage:
-        filters, values = [], []
+        filters, values = ["t.user_id IS ?"], [self.user_id]
         if trip_id:
+            self.get(trip_id, allow_expired=True)
             filters.append("h.trip_id = ?")
             values.append(trip_id)
         else:
@@ -187,11 +192,11 @@ class TripStore:
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO trips
-                   (trip_id, version, state_json, plan_json, expires_at, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (trip_id, version, state_json, plan_json, expires_at, created_at, updated_at, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (state.trip_id, state.state_version, state.model_dump_json(),
                  record.latest_plan.model_dump_json(), state.expires_at.isoformat(),
-                 state.created_at.isoformat(), state.updated_at.isoformat()),
+                 state.created_at.isoformat(), state.updated_at.isoformat(), self.user_id),
             )
             self._append_history(conn, record)
 
@@ -202,7 +207,7 @@ class TripStore:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT version, expires_at FROM trips WHERE trip_id = ?", (state.trip_id,)
+                "SELECT version, expires_at FROM trips WHERE trip_id = ? AND user_id IS ?", (state.trip_id, self.user_id)
             ).fetchone()
             if row is None:
                 raise TripNotFoundError("行程不存在")
@@ -213,9 +218,19 @@ class TripStore:
             conn.execute(
                 """UPDATE trips
                    SET version = ?, state_json = ?, plan_json = ?, expires_at = ?, updated_at = ?
-                   WHERE trip_id = ?""",
+                   WHERE trip_id = ? AND user_id IS ?""",
                 (state.state_version, state.model_dump_json(),
                  record.latest_plan.model_dump_json(), state.expires_at.isoformat(),
-                 state.updated_at.isoformat(), state.trip_id),
+                 state.updated_at.isoformat(), state.trip_id, self.user_id),
             )
             self._append_history(conn, record)
+
+    def delete(self, trip_id: str) -> None:
+        """删除自己的整份规划及历史；与保存使用同一事务锁。"""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT trip_id FROM trips WHERE trip_id = ? AND user_id IS ?", (trip_id, self.user_id)).fetchone()
+            if row is None:
+                raise TripNotFoundError("行程不存在")
+            conn.execute("DELETE FROM trip_history WHERE trip_id = ?", (trip_id,))
+            conn.execute("DELETE FROM trips WHERE trip_id = ?", (trip_id,))

@@ -11,12 +11,13 @@ router = APIRouter(tags=["统一入口"])
 @router.get("/maps/static", summary="获取高德地点分布图")
 async def get_map(
     points: str = Query(..., min_length=3, max_length=250),
+    start: int | None = Query(default=None, ge=1, le=1000),
     amap: AmapService = Depends(get_amap),
 ) -> Response:
     try:
-        image, content_type = await get_static_map(points, amap)
+        image, content_type = await get_static_map(points, amap, start=start)
         return Response(content=image, media_type=content_type,
-                        headers={"Cache-Control": "public, max-age=3600"})
+                        headers={"Cache-Control": "private, no-store"})
     except (ValueError, TypeError) as exc:
         raise TravelAPIError(422, 40002, str(exc)) from exc
     except MapServiceError as exc:

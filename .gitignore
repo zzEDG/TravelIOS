@@ -21,3 +21,9 @@ backend/.runtime/
 .idea/
 .vscode/
 debug_api.py
+
+deploy/*.env
+deploy/*.tar.gz
+deploy/*.tar
+
+deploy/postgres.part.*

@@ -1,6 +1,7 @@
 """和风WebAPI v1每日预报；仅请求天气，不生成天气事实。"""
 
 from datetime import date, datetime
+import logging
 from math import isfinite
 import re
 from zoneinfo import ZoneInfo
@@ -9,6 +10,9 @@ import httpx
 
 from app.config import get_settings
 from app.models.travel import GeoLocation, WeatherState
+
+
+diagnostics_logger = logging.getLogger("app.diagnostics")
 
 
 class QWeatherError(ValueError):
@@ -106,4 +110,5 @@ class QWeatherService:
         try:
             return await self.forecast(location, visit_date), None
         except QWeatherError as exc:
+            diagnostics_logger.warning("天气查询降级 service=qweather error_type=%s", type(exc).__name__)
             return None, str(exc)

@@ -372,3 +372,10 @@ class ErrorResponse(BaseModel):
     data: None = None
     meta: dict[str, Any] | None = None
     details: list[dict[str, str]] | None = None
+
+
+class TripDeleteResponse(BaseModel):
+    code: Literal[0] = 0
+    message: Literal["success"] = "success"
+    data: None = None
+    meta: ResponseMeta = Field(default_factory=ResponseMeta)

@@ -6,7 +6,7 @@ from pathlib import Path
 from app.agents.main_agent import MainAgent
 from app.models.travel import CityWalkPlanRequest, GeoLocation, TravelRequest
 from app.models.trip_store import TripStore
-from app.services.preferences import PreferenceExtractor, PreferencePatch
+from app.services.preferences import PreferenceExtractor, PreferencePatch, explicitly_keep_all_previous_places
 from app.services.trip_service import TripService
 from narrator_fixtures import OfflineNarrationMixin
 import test_citywalk
@@ -53,6 +53,12 @@ class LockedCityWalkTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCas
         await self.main.plan(TravelRequest(trip_id=trip_id, state_version=3, message="不必保留转角咖啡"))
         self.assertEqual(self.trips.get_trip(trip_id).state.locked_place_ids, [])
 
+    async def test_explicit_keep_all_only_for_requests_without_exceptions(self):
+        self.assertTrue(explicitly_keep_all_previous_places("新增一个点，其他的点不变"))
+        self.assertTrue(explicitly_keep_all_previous_places("原有地点都保留"))
+        self.assertFalse(explicitly_keep_all_previous_places("把咖啡换掉，其他点不变"))
+        self.assertFalse(explicitly_keep_all_previous_places("新增一个点"))
+
     async def test_invalid_id_and_too_many_locks_do_not_save(self):
         first = await self.first()
         trip_id = first.data.trip_id
@@ -95,11 +101,12 @@ class LockedCityWalkTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCas
         previous.state.locked_place_ids = ["p2"]
         previous.state._previous_places = previous.latest_plan.places
         extractor = PreferenceExtractor.__new__(PreferenceExtractor)
-        extractor.chain = unittest.mock.AsyncMock()
-        extractor.chain.ainvoke.return_value = PreferencePatch(routing_english="Keep the cafe")
+        extractor.model = unittest.mock.AsyncMock()
+        extractor.model.ainvoke.return_value = {"raw": None, "parsed": {"routing_english": "Keep the cafe"}, "parsing_error": None}
         await extractor.extract("保留咖啡", previous.state)
         import json
-        payload = json.loads(extractor.chain.ainvoke.await_args.args[0]["input"])
+        messages = extractor.model.ainvoke.await_args.args[0]
+        payload = json.loads(messages[-1].content.split("User message and current trip state:", 1)[1])
         place = next(p for p in payload["previous_places"] if p["id"] == "p2")
         self.assertEqual(place["name"], "转角咖啡")
         self.assertTrue(place["locked"])

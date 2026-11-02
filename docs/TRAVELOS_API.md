@@ -10,7 +10,7 @@
 
 成功返回 code=0、message=success、data、meta。meta 含 schema_version、decision_source=JEV、route_confidence（仅统一路由，集中程度而非正确率）、fallback_applied、degraded_services。有真实地点但天气等增强缺失时仍成功并标记；没有可用候选或没有满足硬约束的路线时返回错误，失败/澄清均不更新状态。
 
-SQLite 路径为 backend/.runtime/trips.sqlite3；trips 保存最新状态，trip_history 保存每次成功规划的状态和结果快照。续接有效期 30 天；历史快照持续保留，过期后可查看并显式重新规划。每次成功续接 state_version 加一，在同一事务中检查旧版本、更新最新状态并追加历史。旧数据库首次载入时只迁移实际保留的最新版本，不能恢复已覆盖的版本。API Key 不进入存储。
+PostgreSQL 连接通过 DATABASE_URL 配置；trips 保存最新状态，trip_history 保存每次成功规划的状态和结果快照。续接有效期 30 天；历史快照持续保留，过期后可查看并显式重新规划。每次成功续接 state_version 加一，在同一事务中检查旧版本、更新最新状态并追加历史。旧 SQLite 数据需使用迁移脚本导入，不能恢复此前已覆盖的版本。API Key 不进入存储。
 
 ## 1. CityWalk：POST /citywalk/plan
 
@@ -134,7 +134,7 @@ GET /trips/{trip_id} 返回 data.state、data.latest_plan 与 data.latest_versio
 | 502 / 50004 | 英文翻译无效 |
 | 502 / 50005 | 偏好抽取格式无效 |
 | 502 / 50006 | ReAct 候选检索或审核失败、超时、超过限定轮次 |
-| 503 / 50010 | SQLite 存储失败 |
+| 503 / 50010 | PostgreSQL 存储失败 |
 | 502 / 50000 | 其他处理失败 |
 
 ## 响应字段类型补充

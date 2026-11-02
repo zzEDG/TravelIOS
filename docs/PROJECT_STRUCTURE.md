@@ -29,7 +29,7 @@ flowchart TD
     WN --> SAVE["TripService.save：保存规划和讲述"]
     AN --> SAVE
     FN --> SAVE
-    SAVE --> DB[("TripStore / SQLite：最新状态与历史版本")]
+    SAVE --> DB[("PostgreSQL：最新状态与历史版本")]
 ```
 
 规划 Agent 在 `AGENT_TYPES` 中注册，讲述者在 `NARRATOR_TYPES` 中注册。每轮只执行选中的规划 Agent 及其对应讲述者。`SubAgent`、`DiscoveryAgent`、`NarratorAgent` 是共用能力的抽象基类。
@@ -42,7 +42,7 @@ flowchart TD
 backend/
 ├── run.py / debug_api.py          # 启动与 WSL 调试
 ├── tests/                        # 离线回归测试
-├── .runtime/trips.sqlite3         # 行程数据库
+├── .runtime/trips.sqlite3         # 旧数据库及迁移备份（正常运行不使用）
 └── app/
     ├── main.py                   # FastAPI 应用、路由注册与启动检查
     ├── config.py                 # 配置读取
@@ -86,7 +86,8 @@ backend/
     ├── models/
     │   ├── travel.py             # 请求、状态、规划、讲述和响应模型
     │   ├── walk.py               # 步行算法及旧接口数据模型
-    │   └── trip_store.py         # SQLite 存储、历史快照和版本事务
+    │   ├── postgres_trip_store.py # PostgreSQL 历史快照和版本事务
+    │   └── trip_store.py          # 旧 SQLite 存储及迁移兼容
     ├── integrations/
     │   ├── amap_service.py       # 高德地点、坐标、步行路线和静态地图
     │   ├── jev_service.py        # Jev score / choice 调用
@@ -155,7 +156,7 @@ async def main():
 asyncio.run(main())  # 只在独立脚本入口使用；FastAPI 路由里直接 await。
 ```
 
-Controller、规划 Agent、偏好抽取、讲述及外部集成使用 `async def` / `await`，HTTP 调用使用 `httpx.AsyncClient`，模型使用 `ainvoke`。同轮候选路线、独立搜索与翻译可以并发；景点逐站选择仍顺序执行。同步 SQLite 操作通过线程池执行，事务和版本检查保留。完整说明见 [异步执行与并发边界](ASYNC_EXECUTION.md)。
+Controller、规划 Agent、偏好抽取、讲述及外部集成使用 `async def` / `await`，HTTP 调用使用 `httpx.AsyncClient`，模型使用 `ainvoke`。同轮候选路线、独立搜索与翻译可以并发；景点逐站选择仍顺序执行。同步 PostgreSQL 操作通过线程池执行，事务和版本检查保留。完整说明见 [异步执行与并发边界](ASYNC_EXECUTION.md)。
 
 ## 新建、修改与历史版本
 
@@ -204,7 +205,7 @@ Controller、规划 Agent、偏好抽取、讲述及外部集成使用 `async de
 | 各子功能的评价风格 | `agents/narrators/` 下对应讲述者 |
 | 修改内容的比较规则 | `services/plan_changes.py` |
 | 状态合并与历史续接 | `services/trip_service.py` |
-| SQLite 查询、事务和历史保存 | `models/trip_store.py` |
+| PostgreSQL 查询、事务和历史保存 | `models/postgres_trip_store.py` |
 | 外部 API 调用及连接管理 | `integrations/`、`dependencies.py` |
 | 独立 I/O 并发、取消后的任务清理 | `concurrency.py`、`agents/discovery.py` |
 
