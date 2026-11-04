@@ -6,12 +6,13 @@
     <template v-if="snapshot">
       <a-alert v-if="plan.state_version < snapshot.latest_version" type="info" show-icon class="notice" :message="'正在查看历史版本 ' + plan.state_version + '，当前最新为版本 ' + snapshot.latest_version + '。修改后会保存为新版本。'" />
       <section class="result-hero">
-        <img v-if="plan.cover" :src="plan.cover.url" :alt="plan.cover.alt" />
+        <img v-if="plan.cover && !coverFailed" :src="plan.cover.url" :alt="plan.cover.alt" @error="coverFailed = true" />
         <div class="hero-text"><div class="eyebrow">{{ skillNames[plan.routed_skill] }} · {{ snapshot.state.city }}</div><h1>{{ plan.title }}</h1><p>{{ plan.summary }}</p>
           <p v-if="snapshot.state.origin_name">起点：{{ snapshot.state.origin_name }}</p><div class="chips"><span>{{ plan.places.length }} {{ food ? '家备选餐厅' : '个地点' }}</span><span v-if="!food && !attraction">{{ plan.duration_semantics === 'WALKING_ONLY' ? '预计步行 ' + plan.estimated_minutes + ' 分钟（不含停留）' : plan.estimated_minutes + ' 分钟估计' }}</span><span v-if="!food && !attraction && plan.total_walking_meters !== null">步行 {{ plan.total_walking_meters }} 米</span><span>已保存 · 版本 {{ plan.state_version }}</span></div>
           <a v-if="plan.cover" :href="plan.cover.unsplash_url" target="_blank" rel="noopener noreferrer" class="credit">氛围示意图 · {{ plan.cover.photographer }} / Unsplash</a>
         </div>
       </section>
+      <a-alert v-if="coverFailed" type="warning" show-icon class="notice" message="封面图片加载失败，请检查浏览器的图片访问网络。" />
       <a-alert v-if="meta?.degraded_services.length" type="warning" show-icon class="notice" :message="'部分信息暂不可用：' + meta.degraded_services.map(v => ({WEATHER:'天气',UNSPLASH:'封面',AMAP_ROUTE:'部分路线',AMAP_RATE_LIMIT:'高德地图请求过于频繁，部分地点或路线未能查询，请稍后重试',NARRATOR:'详细讲述（已提供基础评价，可切换模型重新规划）'}[v] || v)).join('、')" />
       <a-alert v-if="plan.places.length < requestedCount" type="warning" show-icon class="notice"
         :message="'目标 ' + requestedCount + ' 个地点，实际找到 ' + plan.places.length + ' 个'"
@@ -52,6 +53,7 @@
             <p class="muted">{{ busy ? '正在处理，请等待完成。' : '成功后自动保存，失败保留原行程。' }}</p>
           </a-card>
           <a-card v-if="plan.weather" :bordered="false" class="travel-card"><h2>出行天气 · {{ plan.weather.source === 'QWEATHER' ? '和风' : '高德' }}</h2><p v-if="plan.weather.temperature_max_c != null || plan.weather.temperature_min_c != null">最低 {{ plan.weather.temperature_min_c ?? '未知' }} °C / 最高 {{ plan.weather.temperature_max_c ?? '未知' }} °C</p><p>{{ plan.weather.forecast_date }} · {{ plan.weather.day_condition }} · {{ plan.weather.day_temperature_c ?? '未知' }} °C</p><p class="muted">夜间 {{ plan.weather.night_condition }} · {{ plan.weather.night_temperature_c ?? '未知' }} °C</p><p v-if="plan.weather.precipitation_probability_day != null">白天降水概率 {{ Math.round(plan.weather.precipitation_probability_day * 100) }}%</p><p v-if="plan.weather.precipitation_probability_night != null">夜间降水概率 {{ Math.round(plan.weather.precipitation_probability_night * 100) }}%</p><a v-if="plan.weather.source === 'QWEATHER'" href="https://www.qweather.com" target="_blank" rel="noopener noreferrer">天气来源：和风天气 ↗</a><a v-else href="https://www.amap.com" target="_blank" rel="noopener noreferrer">天气来源：高德地图 ↗</a></a-card>
+          <a-card v-else :bordered="false" class="travel-card"><h2>出行天气</h2><p class="muted">天气暂不可用，请出发前查看当地天气预报。</p></a-card>
           <a-card :bordered="false" class="travel-card"><h2>出发前确认</h2><ul><li v-for="note in plan.notes" :key="note">{{ note }}</li></ul></a-card>
         </aside>
       </div>
@@ -73,7 +75,7 @@ import { mapImageUrl } from '@/api/maps'
 import { skillNames } from '@/types/travel'
 import type { Snapshot, Meta, TravelPlan } from '@/types/travel'
 const route=useRoute(),router=useRouter(), snapshot=ref<Snapshot | null>(null),meta=ref<Meta | null>(null)
-const busy=ref(false),error=ref(''),text=ref(''),clarification=ref(''),pending=ref(''),mapFailed=ref(false)
+const busy=ref(false),error=ref(''),text=ref(''),clarification=ref(''),pending=ref(''),mapFailed=ref(false),coverFailed=ref(false)
 const historyRefresh=ref(0)
 watch(error, value => { if (value) showError(value) })
 let loadId=0
@@ -98,7 +100,7 @@ async function load() {
     if(version !== undefined && (!Number.isInteger(version) || version < 1)) throw new Error('规划版本无效')
     const response=await getTrip(String(route.params.id),version)
     if(id !== loadId) return
-    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);mapPage.value=1;mapFailed.value=false
+    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);mapPage.value=1;mapFailed.value=false;coverFailed.value=false
   } catch(e) {if(id===loadId) error.value=e instanceof Error ? e.message : '读取失败'} finally {if(id===loadId) busy.value=false}
 }
 watch(()=>[route.params.id,route.query.version],()=>{snapshot.value=null;clarification.value='';pending.value='';text.value='';load()},{immediate:true})
@@ -116,7 +118,7 @@ async function send() {
     let restored
     try { restored=await getTrip(response.data.trip_id) }
     catch { throw new Error('行程已保存，但读取新结果失败。请点击“刷新已保存行程”后继续修改') }
-    snapshot.value=restored.data;meta.value=response.meta;mapPage.value=1;mapFailed.value=false;clarification.value='';pending.value='';text.value=''
+    snapshot.value=restored.data;meta.value=response.meta;mapPage.value=1;mapFailed.value=false;coverFailed.value=false;clarification.value='';pending.value='';text.value=''
     historyRefresh.value++
     await router.replace({name:ROUTE_NAMES.TRIP_DETAIL,params:{id:response.data.trip_id}})
   } catch(e) {

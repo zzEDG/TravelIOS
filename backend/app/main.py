@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings, validate_config, print_config
+from app.services.redis_cache import create_cache
 from app.controllers import citywalk, attraction, food, travel, trips, locations, maps, auth
 from app.controllers.auth_dependencies import require_user
 from app.services.auth_service import AuthError, csrf_secret
@@ -76,7 +77,12 @@ async def lifespan(app: FastAPI):
     print("📖 ReDoc文档: http://localhost:8000/redoc")
     print("="*60 + "\n")
 
-    yield  # 允许应用继续运行
+    app.state.cache = create_cache(os.getenv("REDIS_URL", ""))
+    try:
+        yield
+    finally:
+        if app.state.cache is not None:
+            await app.state.cache.close()
 
     """应用关闭事件"""
     print("\n" + "="*60)
@@ -162,13 +168,3 @@ async def health():
         "version": settings.app_version
     }
 
-
-if __name__ == "__main__":
-    import uvicorn
-    
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True
-    )

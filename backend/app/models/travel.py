@@ -105,7 +105,7 @@ class CityWalkPlanRequest(TripPlanFields):
     target_stops: int | None = Field(default=None, ge=2, le=10)
     start_location: GeoLocation | None = None
     max_walking_meters: int | None = Field(default=None, ge=500, le=30000)
-    radius_meters: int | None = Field(default=None, ge=500, le=10000)
+    radius_meters: int | None = Field(default=None, ge=500, le=100000)
     avoid_commercial: bool | None = None
     travel_date: date | None = None
     interests: PreferenceList | None = None
@@ -165,6 +165,7 @@ class AttractionPlanRequest(DiscoveryRequest):
 class FoodSearchRequest(DiscoveryRequest):
     position_field = "center_location"
     center_location: GeoLocation | None = None
+    travel_date: date | None = None
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] | None = None
     cuisine_preference: PreferenceList | None = None
     avoid: PreferenceList | None = None

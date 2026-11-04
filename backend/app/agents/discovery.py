@@ -26,6 +26,13 @@ class DiscoveryAgent(SubAgent):
         self.jev = jev if jev is not None else self.resources.jev
         self.translator = translator if translator is not None else self.resources.translator
 
+    async def cover(self, query):
+        """Fetch an optional illustrative cover without failing the plan."""
+        try:
+            return await self.resources.unsplash.cover(query)
+        except Exception:
+            return None
+
     @cached_property
     def candidate_search(self):
         return self.resources.candidate_search

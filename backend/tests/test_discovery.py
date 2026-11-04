@@ -94,6 +94,24 @@ class DiscoveryTests(OfflineNarrationMixin, unittest.IsolatedAsyncioTestCase):
         self.addCleanup(weather.stop)
         weather.start().return_value.lookup = AsyncMock(return_value=(None, "测试中不请求天气"))
 
+    async def test_discovery_covers_and_failure_fallback(self):
+        from app.agents.discovery import DiscoveryResult
+        from app.models.walk import CoverPhoto
+        cover = CoverPhoto(url="https://images.unsplash.com/test", alt="illustration",
+                           photographer="Example", photographer_url="https://unsplash.com/@example",
+                           unsplash_url="https://unsplash.com/photos/example")
+        for skill, agent_cls in (("FOOD", FoodAgent), ("ATTRACTION", AttractionAgent)):
+            agent = agent_cls(FakeAmap(), FakeJev(), FakeTranslator())
+            agent.prepare_recommendations = AsyncMock(return_value=(DiscoveryResult([], {}, []), []))
+            with patch("app.dependencies.ServiceResources.unsplash", new_callable=PropertyMock) as service:
+                service.return_value.cover = AsyncMock(return_value=cover)
+                plan = await agent.execute(state(skill))
+                self.assertEqual(plan.cover, cover)
+                self.assertTrue(any("氛围示意" in note for note in plan.notes))
+                service.return_value.cover = AsyncMock(side_effect=RuntimeError("offline"))
+                plan = await agent.execute(state(skill))
+                self.assertIsNone(plan.cover)
+
     async def test_food_batches_all_candidates_and_reports_origin_distance(self):
         from test_place_counts import NearbyPlaces
         from app.integrations.amap_service import distance_m

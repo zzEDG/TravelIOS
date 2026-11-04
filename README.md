@@ -32,7 +32,47 @@ cp .env.example .env
 # 编辑 .env，填写上述密钥
 ```
 
-Windows PowerShell 可使用 `Copy-Item .env.example .env`。`.env` 含私有密钥，已被 Git 忽略；前端无需填写地图密钥。
+Windows PowerShell 可使用 `Copy-Item .env.example .env`。在 `backend/.env` 中设置至少 32 字节的随机 `AUTH_CSRF_SECRET`；本地 HTTP 开发需设置 `AUTH_COOKIE_SECURE=false`。`.env` 含私有密钥，已被 Git 忽略；前端无需填写地图密钥。
+
+## Docker 部署
+
+项目提供 Docker Compose 配置，包含前端（Vue 构建产物和 Nginx）、FastAPI 后端、PostgreSQL 16 和一次性数据库迁移服务。需要 Docker Engine 和 Docker Compose 插件，以及可用的外部服务密钥。
+
+首次部署时，在项目根目录准备配置：
+
+```bash
+mkdir -p deploy
+cp backend/.env.example deploy/backend.env
+# 编辑 deploy/backend.env：填写各服务密钥和至少 32 字节随机的 AUTH_CSRF_SECRET。
+# 设置 CORS_ORIGINS 为浏览器访问地址，例如 http://服务器IP；若端口不是 80，需包含端口。
+# 仅在使用 HTTP 时设置 AUTH_COOKIE_SECURE=false；配置 HTTPS 后设为 true。
+python3 -c 'import secrets; print("POSTGRES_PASSWORD=" + secrets.token_hex(24) + "\nHTTP_PORT=80")' > .env
+chmod 600 .env deploy/backend.env
+```
+
+上述生成命令会覆盖项目根目录已有的 `.env`；如果已部署过，请保留原文件和数据库密码。`deploy/backend.env` 中示例的 `DATABASE_URL` 会被 Compose 中指向数据库容器的配置覆盖。将 `AUTH_CSRF_SECRET` 设置为独立的随机值，例如运行 `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` 后写入配置文件。两份环境文件均包含敏感信息，不要提交到 Git 或公开分享。
+
+```bash
+docker compose config -q
+docker compose up -d --build
+docker compose ps
+curl --fail http://127.0.0.1/health
+```
+
+默认访问 `http://服务器IP`，即 80 端口；如修改 `HTTP_PORT`，访问时需带端口并同步修改 `CORS_ORIGINS`。云服务器还需要在安全组放行对应端口。数据库和后端只在容器网络内访问，PostgreSQL 数据保存在 `postgres_data` 卷中。首次启动时 Compose 会等待数据库就绪，执行认证表迁移，再启动后端和前端。
+
+当前服务器部署在 <http://47.114.72.128>，文件位于 `/opt/travelos`。这是独立的新数据库，不会自动包含本地账号或历史行程。当前访问使用 HTTP，登录信息传输未加密；配置域名和 HTTPS 后应启用安全 Cookie。
+
+常用维护命令（在部署目录执行）：
+
+```bash
+docker compose logs --tail=100 backend
+docker compose restart backend
+docker compose exec -T db pg_dump -U travelos travelos > travelos-backup.sql
+docker compose down
+```
+
+`docker compose down` 会停止并移除容器，但保留数据卷；不要随意使用 `docker compose down -v`，它会删除数据库数据。镜像离线传输、服务器更新和更多细节见 [Docker 部署说明](docs/DOCKER_DEPLOY.md)。
 
 ## PostgreSQL 数据库
 
@@ -71,6 +111,8 @@ python -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell 使用 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+# 首次启动或数据库结构更新后初始化认证表
+python scripts/migrate_user_auth.py
 python run.py
 ```
 
@@ -112,9 +154,10 @@ backend/app/controllers/   API 接口
 backend/app/services/      检索、路线、偏好及行程服务
 backend/app/integrations/  高德、天气、模型与图片服务
 backend/app/models/        请求、响应及 PostgreSQL 行程存储
-backend/scripts/           SQLite 旧数据迁移脚本
+backend/scripts/           数据库迁移脚本
 backend/tests/             后端测试
 frontend/src/              Vue 页面、组件与 API 调用
+compose.yaml               前端、后端、迁移和 PostgreSQL 容器编排
 docs/                      接口、设计说明与功能截图
 ```
 

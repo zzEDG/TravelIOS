@@ -17,6 +17,7 @@ load_dotenv(env_path)
 # 从交互式 Bash 补齐应用需要的变量；已有环境变量和 .env 优先。
 _SHELL_ENV_NAMES = (
     "DATABASE_URL",
+    "REDIS_URL",
     "AMAP_API_KEY",
     "UNSPLASH_ACCESS_KEY",
     "DEEPSEEK_API_KEY",
@@ -44,7 +45,7 @@ def load_wsl_shell_environment() -> None:
             return
     except OSError:
         return
-    if (os.getenv("KIMI_API_KEY") or os.getenv("MOONSHOT_API_KEY")) and all(os.environ.get(name) for name in ("AMAP_API_KEY", "UNSPLASH_ACCESS_KEY", "OPENROUTER_API_KEY", "QWEATHER_API_HOST")) and (os.getenv("QWEATHER_API_KEY") or os.getenv("QWEATHER_JWT")) and any(
+    if os.getenv("REDIS_URL") and (os.getenv("KIMI_API_KEY") or os.getenv("MOONSHOT_API_KEY")) and all(os.environ.get(name) for name in ("AMAP_API_KEY", "UNSPLASH_ACCESS_KEY", "OPENROUTER_API_KEY", "QWEATHER_API_HOST")) and (os.getenv("QWEATHER_API_KEY") or os.getenv("QWEATHER_JWT")) and any(
         os.environ.get(name) for name in ("LLM_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY")
     ):
         return

@@ -26,7 +26,8 @@ curl --fail http://127.0.0.1/health
 如果使用已打包镜像：
 
 ```bash
-gzip -dc deploy/travelos-images.tar.gz | docker load
+gzip -dc /root/travelos-app-images.tar.gz | docker load
+gzip -dc /root/travelos-postgres.tar.gz | docker load
 docker compose up -d --no-build
 ```
 

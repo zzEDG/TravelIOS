@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from app.integrations.llm_service import validate_provider
 from starlette.concurrency import run_in_threadpool
 
@@ -14,9 +14,9 @@ from app.models.postgres_trip_store import PostgresTripStore
 from app.controllers.auth_dependencies import require_user
 
 
-async def get_resources(x_ai_model: str = Header(default="default")) -> AsyncIterator[ServiceResources]:
+async def get_resources(request: Request, x_ai_model: str = Header(default="default")) -> AsyncIterator[ServiceResources]:
     validate_provider(x_ai_model)
-    async with ServiceResources(provider=x_ai_model) as resources:
+    async with ServiceResources(provider=x_ai_model, cache=getattr(request.app.state, "cache", None)) as resources:
         yield resources
 
 

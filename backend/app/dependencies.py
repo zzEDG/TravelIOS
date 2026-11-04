@@ -21,9 +21,10 @@ from app.services.candidate_search import ReActCandidateSearch
 class ServiceResources(AsyncExitStack):
     """每个请求各有一个普通实例；请求内按需创建，请求结束关闭连接。"""
 
-    def __init__(self, provider="default"):
+    def __init__(self, provider="default", cache=None):
         super().__init__()
         self.provider = provider
+        self.cache = cache
 
     def _client(self, timeout=15, *, trust_env=True, service="external"):
         client = DiagnosticAsyncClient(
@@ -36,7 +37,7 @@ class ServiceResources(AsyncExitStack):
 
     @cached_property
     def amap(self) -> AmapService:
-        return AmapService(get_settings().amap_api_key, self._client(trust_env=False, service="amap"))
+        return AmapService(get_settings().amap_api_key, self._client(trust_env=False, service="amap"), cache=self.cache)
 
     @cached_property
     def jev(self) -> JevService:
@@ -62,7 +63,7 @@ class ServiceResources(AsyncExitStack):
 
     @cached_property
     def weather(self) -> QWeatherService:
-        return QWeatherService(client=self._client(timeout=12, trust_env=False, service="qweather"))
+        return QWeatherService(client=self._client(timeout=12, trust_env=False, service="qweather"), cache=self.cache)
 
     @cached_property
     def unsplash(self) -> UnsplashService:

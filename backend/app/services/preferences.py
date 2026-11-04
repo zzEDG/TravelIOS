@@ -139,7 +139,7 @@ _SYSTEM = """
   * “再加 N 个” $\rightarrow$ 原数量 + N。
   * 仅说“加个咖啡店”等类别 $\rightarrow$ 属于兴趣变更，**不改变**总数量字段（保持 null）。
 * **搜索放大系数**：
-  * 景点 / 城市漫步：`search_limit` = `target_stops * 2`。
+  * 景点 / 城市漫步：`search_limit` = `target_stops * 3`。
   * 餐厅推荐：`search_limit` = `limit * 3`。
   * （若未修改数量，两者均返回 null）
 

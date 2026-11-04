@@ -34,15 +34,18 @@ class AttractionAgent(DiscoveryAgent):
             radius=state.radius_meters, target_count=state.target_stops,
             types="110000|140100|140200|140400|140600|140700",
         )
-        weather, weather_notice = None, None
-        if state.consider_weather:
-            (result, places), (weather, weather_notice) = await gather_results(
-                selection, self.weather_service.lookup(state.current_location, state.travel_date),
-            )
-        else:
-            result, places = await selection
+        async def lookup_weather():
+            if state.consider_weather:
+                return await self.weather_service.lookup(state.current_location, state.travel_date)
+            return None, None
+
+        (result, places), (weather, weather_notice), cover = await gather_results(
+            selection, lookup_weather(), self.cover("travel landmarks architecture"),
+        )
         notes = ["距离为各景点到同一起点的直线距离。",
                  "未核验开放时间、预约和票价。"]
+        if cover:
+            notes.append("Unsplash 图片仅为氛围示意，不代表景点实景。")
         if locked:
             notes.insert(0, "锁定地点优先展示，其余地点按偏好匹配度排序。")
         if state.consider_weather and weather is None:
@@ -55,5 +58,5 @@ class AttractionAgent(DiscoveryAgent):
             trip_id=state.trip_id, state_version=state.state_version,
             title=f"{state.city}景点推荐", summary=f"为你挑选了{len(places)}个景点。",
             origin=state.current_location, places=places, routes=[],
-            weather=weather, notes=notes,
+            weather=weather, cover=cover, notes=notes,
         )

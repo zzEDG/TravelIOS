@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.config import get_settings
+from app.services.redis_cache import cache_key
 from app.models.travel import GeoLocation, WeatherState
 
 
@@ -33,11 +34,12 @@ def _probability(section):
 
 
 class QWeatherService:
-    def __init__(self, host=None, api_key=None, jwt=None, client=None):
+    def __init__(self, host=None, api_key=None, jwt=None, client=None, cache=None):
         settings = get_settings()
         self.host = (settings.qweather_api_host if host is None else host).strip()
         self.api_key = settings.qweather_api_key if api_key is None else api_key
         self.jwt = settings.qweather_jwt if jwt is None else jwt
+        self.cache = cache
         self.client = client or httpx.AsyncClient(timeout=12, follow_redirects=False, trust_env=False)
 
     async def forecast(self, location: GeoLocation, visit_date: date | None = None) -> WeatherState:
@@ -51,36 +53,43 @@ class QWeatherService:
         if not 0 <= (wanted - today).days < 10:
             raise QWeatherError("所选日期超出和风未来10天预报范围，请临近出发时再查询")
         headers = {"Authorization": f"Bearer {self.jwt}"} if self.jwt else {"X-QW-Api-Key": self.api_key}
-        try:
-            response = await self.client.get(
-                f"https://{host}/weather/v1/daily/{location.latitude:.2f}/{location.longitude:.2f}",
-                params={"days": 10, "localTime": "true", "lang": "zh"},
-                headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPStatusError as exc:
-            # 只映射已知错误类型，不向页面透传可能含敏感信息的响应正文。
-            error_type = ""
+        params = {"latitude": f"{location.latitude:.2f}", "longitude": f"{location.longitude:.2f}",
+                  "days": 10, "localTime": "true", "lang": "zh", "host": host}
+        key = cache_key("qweather", "daily", params, self.api_key or self.jwt)
+        data = await self.cache.get(key) if self.cache else None
+        if not isinstance(data, dict) or not isinstance(data.get("days"), list) or not data["days"]:
             try:
-                error_data = exc.response.json()
-                if isinstance(error_data, dict) and isinstance(error_data.get("error"), dict):
-                    error_type = error_data["error"].get("type", "")
-            except ValueError:
-                pass
-            if exc.response.status_code == 403 and error_type == (
-                "https://dev.qweather.com/docs/resource/error-code/#security-restriction"
-            ):
-                raise QWeatherError(
-                    "和风天气请求被安全限制拒绝（HTTP 403 / Security Restriction）。"
-                    "请在和风控制台对应凭据中检查应用限制和API限制，"
-                    "允许当前后端访问每日天气预报；服务未返回具体命中的规则。"
-                ) from None
-            raise QWeatherError(f"和风天气请求失败（HTTP {exc.response.status_code}），请检查凭据、Host和接口权限") from None
-        except (httpx.HTTPError, ValueError):
-            raise QWeatherError("和风天气网络或响应异常，请稍后重试") from None
-        if not isinstance(data, dict) or not isinstance(data.get("days"), list):
-            raise QWeatherError("和风未返回有效的每日预报")
+                response = await self.client.get(
+                    f"https://{host}/weather/v1/daily/{location.latitude:.2f}/{location.longitude:.2f}",
+                    params={"days": 10, "localTime": "true", "lang": "zh"},
+                    headers=headers,
+                )
+                response.raise_for_status()
+                data = response.json()
+            except httpx.HTTPStatusError as exc:
+                # 只映射已知错误类型，不向页面透传可能含敏感信息的响应正文。
+                error_type = ""
+                try:
+                    error_data = exc.response.json()
+                    if isinstance(error_data, dict) and isinstance(error_data.get("error"), dict):
+                        error_type = error_data["error"].get("type", "")
+                except ValueError:
+                    pass
+                if exc.response.status_code == 403 and error_type == (
+                    "https://dev.qweather.com/docs/resource/error-code/#security-restriction"
+                ):
+                    raise QWeatherError(
+                        "和风天气请求被安全限制拒绝（HTTP 403 / Security Restriction）。"
+                        "请在和风控制台对应凭据中检查应用限制和API限制，"
+                        "允许当前后端访问每日天气预报；服务未返回具体命中的规则。"
+                    ) from None
+                raise QWeatherError(f"和风天气请求失败（HTTP {exc.response.status_code}），请检查凭据、Host和接口权限") from None
+            except (httpx.HTTPError, ValueError):
+                raise QWeatherError("和风天气网络或响应异常，请稍后重试") from None
+            if not isinstance(data, dict) or not isinstance(data.get("days"), list):
+                raise QWeatherError("和风未返回有效的每日预报")
+            if self.cache and data["days"]:
+                await self.cache.set(key, data, 1800)
         for item in data["days"]:
             try:
                 daytime, nighttime = item["daytime"], item["nighttime"]

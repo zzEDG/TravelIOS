@@ -7,9 +7,8 @@ import os
 import random
 import weakref
 from email.utils import parsedate_to_datetime
-from datetime import timezone
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Any, Optional
@@ -18,6 +17,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.models.walk import Weather
+from app.services.redis_cache import cache_key
 
 
 BASE_URL = "https://restapi.amap.com/v3"
@@ -34,6 +34,18 @@ _SAFE_INFOS = _QPS_INFOS | {
     "ABROAD_QUOTA_PLAN_RUN_OUT", "QUOTA_PLAN_RUN_OUT", "SERVICE_EXPIRED",
 }
 _RATE_LIMITERS = weakref.WeakKeyDictionary()
+
+# 缓存统一保存高德 JSON，业务方法负责转换为 Place、WalkingRoute 等结果。
+# 地点缓存使用新版本键，避免读取此前保存的 Place 包装结构。
+_CACHE_POLICIES = {
+    "/place/text": ("places_text_v3", 3600, "pois"),
+    "/place/around": ("places_around_v3", 1800, "pois"),
+    "/direction/walking": ("walking", 3600, "route"),
+    "/geocode/geo": ("geocode", 21600, "geocodes"),
+    "/geocode/regeo": ("regeo", 21600, "regeocode"),
+    "/assistant/coordinate/convert": ("coordinate_convert", 86400, "locations"),
+    "/weather/weatherInfo": ("weather", 1800, "forecasts"),
+}
 
 
 class _RateLimiter:
@@ -111,6 +123,7 @@ class Place:
     adcode: str
     keyword: str
     typecode: str = ""
+    parent_id: str = ""
 
 
 def distance_m(a: Place, b: Place) -> int:
@@ -123,8 +136,9 @@ def distance_m(a: Place, b: Place) -> int:
 
 
 class AmapService:
-    def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None, cache=None):
         self.api_key = api_key
+        self.cache = cache
         self.client = client or httpx.AsyncClient(timeout=15, trust_env=False)
         # 同一请求最多同时向高德发出四次查询，避免候选路线瞬间打满接口。
         self._requests = asyncio.Semaphore(4)
@@ -193,18 +207,37 @@ class AmapService:
         raise AssertionError("unreachable")
 
     async def _get(self, path: str, **params: str) -> dict[str, Any]:
-        return await self._request(path, **params)
+        """所有 JSON 接口共用的缓存入口；空结果和失败响应不写入缓存。"""
+        policy = _CACHE_POLICIES.get(path)
+        if not self.cache or not policy:
+            return await self._request(path, **params)
+        operation, ttl, field = policy
+        key = cache_key("amap", operation, params, self.api_key)
+        cached = await self.cache.get(key)
+        if isinstance(cached, dict) and str(cached.get("status")) == "1" and cached.get(field):
+            return cached
+        data = await self._request(path, **params)
+        usable = bool(data.get(field))
+        if path == "/direction/walking":
+            route = data.get("route")
+            usable = isinstance(route, dict) and bool(route.get("paths"))
+        if usable:
+            await self.cache.set(key, data, ttl)
+        return data
 
     async def search(self, city: str, keyword: str) -> list[Place]:
-        data = await self._get("/place/text", city=city, citylimit="true", keywords=keyword, offset="20")
+        data = await self._get(
+            "/place/text", city=city, citylimit="true", keywords=keyword, offset="20",
+        )
         return self._parse_places(data, keyword)
 
     async def search_around(self, city: str, longitude: float, latitude: float,
                       keyword: str, radius_meters: int, types: str) -> list[Place]:
+        location = f"{longitude:.6f},{latitude:.6f}"
         data = await self._get(
-            "/place/around", city=city, citylimit="true",
-            location=f"{longitude:.6f},{latitude:.6f}", keywords=keyword,
-            radius=str(radius_meters), types=types, offset="20", sortrule="distance",
+            "/place/around", city=city, citylimit="true", location=location,
+            keywords=keyword, radius=str(radius_meters), types=types,
+            offset="25", sortrule="distance",
         )
         return self._parse_places(data, keyword)
 
@@ -230,6 +263,7 @@ class AmapService:
                 adcode=str(poi.get("adcode") or ""),
                 keyword=keyword,
                 typecode=str(poi.get("typecode") or ""),
+                parent_id=poi.get("parent") if isinstance(poi.get("parent"), str) else "",
             ))
         return [place for place in places if place.poi_id and place.name]
 
@@ -332,18 +366,17 @@ class AmapService:
         return None
 
     async def static_map(self, points: list[tuple[float, float]], *, start: int | None = None) -> tuple[bytes, str]:
-        markers = "|".join(
-            f"mid,0x0F766E,{chr(65 + index)}:{lon:.6f},{lat:.6f}"
-            for index, (lon, lat) in enumerate(points)
-        )
         if start is not None:
-            labels = "|".join(
+            params = {"labels": "|".join(
                 f"{('起点' if index == 0 else str(start + index - 1))},0,1,16,0xFFFFFF,0x0F766E:{lon:.6f},{lat:.6f}"
                 for index, (lon, lat) in enumerate(points)
-            )
-            response = await self._request("/staticmap", expect_image=True, size="900*500", labels=labels)
+            )}
         else:
-            response = await self._request("/staticmap", expect_image=True, size="900*500", markers=markers)
+            params = {"markers": "|".join(
+                f"mid,0x0F766E,{chr(65 + index)}:{lon:.6f},{lat:.6f}"
+                for index, (lon, lat) in enumerate(points)
+            )}
+        response = await self._request("/staticmap", expect_image=True, size="900*500", **params)
         if isinstance(response, dict):
             logger.warning("高德静态地图响应无效 path=/staticmap http_status=200 infocode=unknown info=unknown")
             raise ValueError("高德静态地图未返回图片")

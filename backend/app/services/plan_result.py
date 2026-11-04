@@ -9,10 +9,10 @@ from app.models.trip_store import TripRecord
 def response_meta(record: TripRecord) -> ResponseMeta:
     plan = record.latest_plan
     degraded = list(plan.warning_codes)
-    if plan.weather is None and (plan.routed_skill == "CITYWALK" or
+    if plan.weather is None and (plan.routed_skill in ("CITYWALK", "FOOD") or
                                  (plan.routed_skill == "ATTRACTION" and record.state.consider_weather)):
         degraded.append("WEATHER")
-    if plan.cover is None and plan.routed_skill == "CITYWALK":
+    if plan.cover is None:
         degraded.append("UNSPLASH")
     if any(route.distance_meters is None or route.polyline is None for route in plan.routes):
         degraded.append("AMAP_ROUTE")

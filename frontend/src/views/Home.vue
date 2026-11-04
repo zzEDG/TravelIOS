@@ -38,8 +38,8 @@
               <a-col v-if="mode === 'CITYWALK'" :xs="24" :md="8"><a-form-item label="总步行上限（米，可留空）"><a-input-number v-model:value="form.max_walking_meters" :min="mode === 'CITYWALK' ? 500 : 100" :max="30000" :disabled="busy" /></a-form-item></a-col></a-row>
             <a-form-item :label="mode === 'CITYWALK' ? '想去的地方（重要的放前面，用逗号分隔）' : '兴趣（用逗号分隔）'"><a-input v-model:value="form.interests" placeholder="公园，咖啡馆，书店" :disabled="busy" /></a-form-item>
             <a-form-item label="不喜欢（用逗号分隔）"><a-input v-model:value="form.dislikes" :disabled="busy" /></a-form-item>
-            <a-form-item label="出行日期（可选）"><input v-model="form.travel_date" type="date" class="date-input" /></a-form-item>
           </template>
+          <a-form-item v-if="mode !== 'CHAT'" label="出行日期（可选）"><input v-model="form.travel_date" type="date" class="date-input" /><p class="muted">默认查询出行日期的天气，未选择日期时查询今天；同时自动获取氛围封面。</p></a-form-item>
           <template v-if="mode === 'CITYWALK'">
             <a-form-item label="游览先后（可选，按顺序用逗号分隔）"><a-input v-model:value="form.visit_order" placeholder="例如：公园，书店；留空则按位置与偏好逐站安排" :disabled="busy" /></a-form-item>
             <a-form-item label="最后一站想去（可选）"><a-input v-model:value="form.end_with" :maxlength="40" placeholder="例如：咖啡馆" :disabled="busy" /></a-form-item>
@@ -47,7 +47,6 @@
           </template>
           <template v-if="mode === 'ATTRACTION'">
             <a-form-item label="搜索半径（米）"><a-input-number v-model:value="form.radius_meters" :min="500" :max="10000" :disabled="busy" /></a-form-item>
-            <a-form-item label="查询天气"><a-switch v-model:checked="form.consider_weather" :disabled="busy" /></a-form-item>
             <p class="muted">景点按偏好匹配度排序，展示各景点距起点的直线距离。</p>
           </template>
           <template v-if="mode === 'FOOD'">
@@ -137,7 +136,7 @@ async function submit() {
       payload={...resume,city:form.city.trim(),location,origin_name:selectedOrigin.value.name,message:[pendingQuestion.value,chat.value.trim()].filter(Boolean).join('；').slice(-1000)}
     } else if(mode.value==='FOOD') {
       if(form.max_distance_meters==null || form.food_limit==null) throw new Error('请填写距离和餐厅数')
-      Object.assign(payload,{center_location:location,meal_type:form.meal_type,cuisine_preference:list(form.cuisine_preference),avoid:list(form.food_avoid),max_distance_meters:form.max_distance_meters,limit:form.food_limit})
+      Object.assign(payload,{center_location:location,meal_type:form.meal_type,cuisine_preference:list(form.cuisine_preference),avoid:list(form.food_avoid),max_distance_meters:form.max_distance_meters,limit:form.food_limit,travel_date:form.travel_date || null})
     } else {
       if(form.available_hours==null || form.target_stops==null) throw new Error('请填写时长和地点数')
       const minStops = mode.value === 'CITYWALK' ? 2 : 1, maxStops = mode.value === 'CITYWALK' ? 10 : 100
@@ -147,7 +146,7 @@ async function submit() {
         if(!form.interests.trim() && !form.additional_requirements.trim() && !form.visit_order.trim() && !form.end_with.trim()) throw new Error('请填写想去的地方或补充要求')
         Object.assign(payload,{start_location:location,theme:form.theme.trim() || '自由漫步',avoid_commercial:form.avoid_commercial,visit_order:list(form.visit_order),end_with:form.end_with.trim() || null})
       }
-      else { if(form.radius_meters==null) throw new Error('请填写搜索半径'); Object.assign(payload,{location,radius_meters:form.radius_meters,consider_weather:form.consider_weather}) }
+      else { if(form.radius_meters==null) throw new Error('请填写搜索半径'); Object.assign(payload,{location,radius_meters:form.radius_meters,consider_weather:true}) }
     }
     busy.value=true
     const response=mode.value==='CHAT' ? await travel(payload) : await createPlan(mode.value,payload)

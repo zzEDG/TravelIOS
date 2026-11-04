@@ -1,9 +1,9 @@
-"""按类别执行有界 ReAct：搜索 → 阅读真实 POI → 审核 → 必要时改词重搜一次。"""
+"""按类别执行有界 ReAct：搜索 → 阅读真实 POI → 审核 → 按需重搜。"""
 
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import httpx
@@ -28,26 +28,20 @@ class CandidateModelProtocolError(CandidateSearchError):
     pass
 
 
-class SearchArguments(BaseModel):
+class SearchAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    keyword: str = Field(min_length=1, max_length=80,description="高德地图搜索服务的关键词")
+    name: Literal['search_places']
+    keyword: str = Field(min_length=1, max_length=80, description="高德地图搜索服务的关键词")
     types: str = Field(default='', pattern=r'^(?:\d{6}(?:\|\d{6})*)?$')
 
 
-class ReviewArguments(BaseModel):
+class ReviewAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    accepted_ids: list[str] = Field(max_length=20)
-    summary: str = Field(min_length=1, max_length=300)
-
-
-class SearchAction(SearchArguments):
-    name: Literal['search_places']
-
-
-class ReviewAction(ReviewArguments):
     name: Literal['review_candidates']
+    accepted_ids: list[str] = Field(max_length=100)
+    summary: str = Field(min_length=1, max_length=300)
 
 
 class FinishAction(BaseModel):
@@ -104,38 +98,51 @@ class CandidateSearchResult:
     retried: bool = False
 
 
-@dataclass
 class _SearchSession:
-    amap: object
-    city: str
-    origin: tuple[float, float] | None
-    radius: int
-    types: str
-    category: str = ''
-    current: dict[str, Place] | None = None
-    accepted: dict[str, Place] = field(default_factory=dict)
-    queries: set = field(default_factory=set)
-    searches: int = 0
-    failures: int = 0
-    done: bool = False
-    reviews: int = 0
+    """一次类别检索的可变状态；每次调用 _run 时创建，供各轮动作共用。"""
 
-    async def search(self, arguments):
-        args = SearchArguments.model_validate(arguments)
-        keyword = args.keyword.strip()
-        types = self.types or args.types
-      
+    def __init__(self, amap, city, origin, radius, types, *, category='', skill=''):
+        self.amap = amap
+        self.city = city
+        self.origin = origin
+        self.center = Place('origin', '', '', '', *origin, '', '') if origin else None
+        self.radius = radius
+        self.types = types
+        self.category = category
+        self.skill = skill
+        self.current: dict[str, Place] | None = None
+        self.accepted: dict[str, Place] = {}
+        self.searches = 0
+        self.failures = 0
+        self.reviews = 0
+
+    def _filter_places(self, places: list[Place]) -> list[Place]:
+        """景点/漫步按父 POI 去重，优先保留父地点，并避开此前已接受的组。"""
+        if self.skill not in ('CITYWALK', 'ATTRACTION'):
+            return places
+        parent_ids = {p.parent_id for p in places if p.parent_id}
+        groups = {p.parent_id or p.poi_id for p in self.accepted.values()}
+        filtered = []
+        for place in sorted(places, key=lambda p: p.poi_id not in parent_ids):
+            group = place.parent_id or place.poi_id
+            if group not in groups:
+                groups.add(group)
+                filtered.append(place)
+        return filtered
+
+    async def search(self, action: SearchAction):
+        keyword = action.keyword.strip()
+        types = self.types or action.types
+
         self.searches += 1
-        self.queries.add((keyword, types))
         self.current = {}
         logger.info('Candidate search: category=%s attempt=%d keyword=%s types=%s',
                     self.category,self.searches,keyword,types)
         try:
             if self.origin:
                 places = await self.amap.search_around(self.city, *self.origin, keyword, self.radius, types)
-                center = Place('origin', '', '', '', *self.origin, '', '')
-                places = sorted((p for p in places if distance_m(center,p) <= self.radius),
-                                key=lambda p:distance_m(center,p))
+                places = sorted((p for p in places if distance_m(self.center, p) <= self.radius),
+                                key=lambda p: distance_m(self.center, p))
             else:
                 places = await self.amap.search(self.city, keyword)
         except AmapRateLimitError:
@@ -143,7 +150,7 @@ class _SearchSession:
         except (AmapServiceError, httpx.HTTPError):
             self.failures += 1
             return {'search':self.searches, 'candidates':[], 'error':'高德搜索失败，请审核空结果后重试。'}
-        for place in places:
+        for place in self._filter_places(places):
             if place.poi_id and place.name:
                 self.current.setdefault(place.poi_id, place)
 
@@ -151,10 +158,9 @@ class _SearchSession:
                 'candidates':[{'id':p.poi_id,'name':p.name,'category':p.category,
                                'address':p.address,'typecode':p.typecode} for p in self.current.values()]}
 
-    def review(self, arguments):
-        """审核当前输出"""
-        args = ReviewArguments.model_validate(arguments)
-        ids = set(args.accepted_ids)
+    def review(self, action: ReviewAction):
+        """用模型已校验的动作审核当前批次。"""
+        ids = set(action.accepted_ids)
         if self.current is None:
             return {'error':'先搜索并观察真实候选，再审核。'}
         if not ids <= self.current.keys():
@@ -237,7 +243,8 @@ class ReActCandidateSearch:
             raise CandidateSearchError('候选地点检索校验失败，请稍后重试') from exc
 
     async def _run(self, amap, city, keyword, origin, radius, types, context):
-        session = _SearchSession(amap, city, origin, radius, types, category=keyword)
+        session = _SearchSession(amap, city, origin, radius, types, category=keyword,
+                                 skill=(context or {}).get('skill', ''))
         chain = _PROMPT | self.llm.with_structured_output(CandidateDecision, method='function_calling')
         request_json = json.dumps(
             {'city':city,'category':keyword,'radius_meters':radius,'context':context or {}},
@@ -248,8 +255,8 @@ class ReActCandidateSearch:
                 decision = CandidateDecision.model_validate(await self._invoke(
                     chain, {'request_json':request_json,'history':history}))
             except ValidationError as exc:
-               history.append(AIMessage(content=json.dumps({'error':'模型输出不符合约束,请重试','details':exc.errors()},ensure_ascii=False)))
-               continue
+                history.append(AIMessage(content=json.dumps({'error':'模型输出不符合约束,请重试','details':exc.errors()},ensure_ascii=False)))
+                continue
             
             action = decision.action
             logger.info('Candidate ReAct: category=%s round=%d\nThought: %s\nAction: %s',

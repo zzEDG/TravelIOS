@@ -4,6 +4,7 @@ x-backend: &backend
   build: ./backend
   env_file: ./deploy/backend.env
   environment:
+    REDIS_URL: redis://redis:6379/0
     DATABASE_URL: postgresql://travelos:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/travelos
   logging:
     driver: json-file
@@ -11,6 +12,12 @@ x-backend: &backend
       max-size: "10m"
       max-file: "3"
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
   db:
     image: postgres:16-alpine
     restart: unless-stopped
