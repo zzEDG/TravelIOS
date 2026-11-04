@@ -80,7 +80,7 @@ class TripState(BaseModel):
     cuisine_preference: list[str] = Field(default_factory=list)
     food_avoid: list[str] = Field(default_factory=list)
     max_distance_meters: int = Field(default=1500, ge=100, le=10000)
-    food_limit: int = Field(default=3, ge=1, le=1000,description="餐厅推荐的最大数量")
+    food_limit: int = Field(default=3, ge=1, le=100,description="餐厅推荐的最大数量")
     search_limit: int = Field(default=10, ge=2, le=1000,description="搜索服务的搜索结果的最大数量")
     created_at: datetime
     updated_at: datetime
@@ -102,7 +102,7 @@ class CityWalkPlanRequest(TripPlanFields):
     locked_place_ids: list[str] | None = Field(default=None, max_length=100, description="完整锁定地点 ID 列表；空列表解除全部锁定")
     theme: str | None = Field(default=None, min_length=2, max_length=40)
     available_hours: int | None = Field(default=None, ge=2, le=8)
-    target_stops: int | None = Field(default=None, ge=2, le=10)
+    target_stops: int | None = Field(default=None, ge=2, le=100)
     start_location: GeoLocation | None = None
     max_walking_meters: int | None = Field(default=None, ge=500, le=30000)
     radius_meters: int | None = Field(default=None, ge=500, le=100000)
@@ -170,7 +170,7 @@ class FoodSearchRequest(DiscoveryRequest):
     cuisine_preference: PreferenceList | None = None
     avoid: PreferenceList | None = None
     max_distance_meters: int | None = Field(default=None, ge=100, le=10000)
-    limit: int | None = Field(default=None, ge=1, le=1000)
+    limit: int | None = Field(default=None, ge=1, le=100)
 
 
 class PlannedPlace(BaseModel):

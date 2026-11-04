@@ -34,7 +34,7 @@
           </template>
           <template v-if="mode === 'CITYWALK' || mode === 'ATTRACTION'">
             <a-row :gutter="20"><a-col :xs="24" :md="8"><a-form-item :label="mode === 'ATTRACTION' ? '可用时长（小时，供推荐参考）' : '可用时长（小时）'"><a-input-number v-model:value="form.available_hours" :min="mode === 'CITYWALK' ? 2 : 0.5" :max="mode === 'CITYWALK' ? 8 : 12" :step="mode === 'CITYWALK' ? 1 : 0.5" :disabled="busy" /></a-form-item></a-col>
-              <a-col :xs="24" :md="8"><a-form-item label="目标地点数"><a-input-number v-model:value="form.target_stops" :min="mode === 'CITYWALK' ? 2 : 1" :max="mode === 'CITYWALK' ? 10 : 100" :precision="0" :disabled="busy" /></a-form-item></a-col>
+              <a-col :xs="24" :md="8"><a-form-item label="目标地点数"><a-input-number v-model:value="form.target_stops" :min="mode === 'CITYWALK' ? 2 : 1" :max="100" :precision="0" :disabled="busy" /></a-form-item></a-col>
               <a-col v-if="mode === 'CITYWALK'" :xs="24" :md="8"><a-form-item label="总步行上限（米，可留空）"><a-input-number v-model:value="form.max_walking_meters" :min="mode === 'CITYWALK' ? 500 : 100" :max="30000" :disabled="busy" /></a-form-item></a-col></a-row>
             <a-form-item :label="mode === 'CITYWALK' ? '想去的地方（重要的放前面，用逗号分隔）' : '兴趣（用逗号分隔）'"><a-input v-model:value="form.interests" placeholder="公园，咖啡馆，书店" :disabled="busy" /></a-form-item>
             <a-form-item label="不喜欢（用逗号分隔）"><a-input v-model:value="form.dislikes" :disabled="busy" /></a-form-item>
@@ -42,7 +42,7 @@
           <a-form-item v-if="mode !== 'CHAT'" label="出行日期（可选）"><input v-model="form.travel_date" type="date" class="date-input" /><p class="muted">默认查询出行日期的天气，未选择日期时查询今天；同时自动获取氛围封面。</p></a-form-item>
           <template v-if="mode === 'CITYWALK'">
             <a-form-item label="游览先后（可选，按顺序用逗号分隔）"><a-input v-model:value="form.visit_order" placeholder="例如：公园，书店；留空则按位置与偏好逐站安排" :disabled="busy" /></a-form-item>
-            <a-form-item label="最后一站想去（可选）"><a-input v-model:value="form.end_with" :maxlength="40" placeholder="例如：咖啡馆" :disabled="busy" /></a-form-item>
+            <a-form-item label="最后一站想去（可选）"><a-input v-model:value="form.end_with" :maxlength="40" :disabled="busy" placeholder="例如：咖啡馆" /></a-form-item>
             <p class="muted">偏好主次与游览顺序分别设置。可以以公园为主、最后去咖啡馆；新增偏好不会自动增加总地点数。</p>
           </template>
           <template v-if="mode === 'ATTRACTION'">
@@ -52,7 +52,7 @@
           <template v-if="mode === 'FOOD'">
             <a-row :gutter="20"><a-col :xs="24" :md="8"><a-form-item label="餐次"><a-select v-model:value="form.meal_type" :options="meals" :disabled="busy" /></a-form-item></a-col>
               <a-col :xs="24" :md="8"><a-form-item label="搜索半径（米，直线）"><a-input-number v-model:value="form.max_distance_meters" :min="100" :max="10000" :disabled="busy" /></a-form-item></a-col>
-              <a-col :xs="24" :md="8"><a-form-item label="备选餐厅数"><a-input-number v-model:value="form.food_limit" :min="1" :max="5" :disabled="busy" /></a-form-item></a-col></a-row>
+              <a-col :xs="24" :md="8"><a-form-item label="备选餐厅数"><a-input-number v-model:value="form.food_limit" :min="1" :max="100" :precision="0" :disabled="busy" /></a-form-item></a-col></a-row>
             <a-form-item label="菜系偏好（用逗号分隔）"><a-input v-model:value="form.cuisine_preference" placeholder="本帮菜，粤菜" :disabled="busy" /></a-form-item>
             <a-form-item label="忌口与口味（用逗号分隔）"><a-input v-model:value="form.food_avoid" placeholder="尽量少辣" :disabled="busy" /></a-form-item>
             <p class="muted">餐厅按偏好匹配度排序，展示距起点的直线距离；忌口需向餐厅确认。</p>
@@ -136,10 +136,11 @@ async function submit() {
       payload={...resume,city:form.city.trim(),location,origin_name:selectedOrigin.value.name,message:[pendingQuestion.value,chat.value.trim()].filter(Boolean).join('；').slice(-1000)}
     } else if(mode.value==='FOOD') {
       if(form.max_distance_meters==null || form.food_limit==null) throw new Error('请填写距离和餐厅数')
+      if(!Number.isInteger(form.food_limit) || form.food_limit<1 || form.food_limit>100) throw new Error('餐厅数量需为 1 到 100 的整数')
       Object.assign(payload,{center_location:location,meal_type:form.meal_type,cuisine_preference:list(form.cuisine_preference),avoid:list(form.food_avoid),max_distance_meters:form.max_distance_meters,limit:form.food_limit,travel_date:form.travel_date || null})
     } else {
       if(form.available_hours==null || form.target_stops==null) throw new Error('请填写时长和地点数')
-      const minStops = mode.value === 'CITYWALK' ? 2 : 1, maxStops = mode.value === 'CITYWALK' ? 10 : 100
+      const minStops = mode.value === 'CITYWALK' ? 2 : 1, maxStops = 100
       if (!Number.isInteger(form.target_stops) || form.target_stops < minStops || form.target_stops > maxStops) throw new Error(`目标地点数需为 ${minStops} 到 ${maxStops} 的整数`) 
       Object.assign(payload,{available_hours:form.available_hours,target_stops:form.target_stops,max_walking_meters:mode.value === 'CITYWALK' ? form.max_walking_meters : null,interests:list(form.interests),dislikes:list(form.dislikes),travel_date:form.travel_date || null})
       if(mode.value==='CITYWALK') {

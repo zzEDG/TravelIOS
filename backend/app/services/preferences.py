@@ -83,7 +83,7 @@ class PreferencePatch(BaseModel):
     limit: int | None = Field(
         default=None,
         ge=1,
-        le=5,
+        le=100,
     )
 
     radius_meters: int | None = Field(

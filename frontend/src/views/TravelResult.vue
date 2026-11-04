@@ -33,18 +33,30 @@
         <p v-if="snapshot.state.end_with">最后一站：{{ snapshot.state.end_with }}</p>
         <p class="muted">下一站根据前一站位置、真实步行路线和剩余预算选择，最终顺序保留决策结果。</p>
       </a-card>
+      <section ref="placesSection" class="places-section" aria-label="推荐地点">
+        <div class="places-heading">
+          <div><h2>{{ food ? '备选餐厅' : attraction ? '推荐景点' : '你的游览顺序' }}</h2><p class="muted">{{ food || attraction ? '按偏好匹配度排序，距离为距起点的直线距离。' : '按游览顺序排列，步行距离来自高德路线。' }}</p></div>
+          <span class="places-count">共 {{ plan.places.length }} {{ food ? '家餐厅' : '个地点' }}</span>
+        </div>
+        <div v-if="visiblePlaces.length" class="places-grid">
+          <article v-for="place in visiblePlaces" :key="place.poi.id" class="place-card">
+            <header class="place-title"><span class="rank">{{ place.step_order }}</span><h3>{{ place.poi.name }}</h3></header>
+            <div class="place-categories"><span v-for="(category,index) in place.poi.category.split(';').filter(Boolean).slice(-2)" :key="index">{{ category }}</span></div>
+            <p class="place-reason">{{ place.why_selected }}</p>
+            <div v-if="food || attraction" class="route-info"><span>距起点 · 直线</span><strong>{{ place.distance_from_origin_meters != null ? place.distance_from_origin_meters + ' 米' : '暂未记录' }}</strong></div>
+            <div v-else class="route-info"><span>{{ fromName(place.poi.id) }} → 本站</span><strong>{{ routeText(place.poi.id) }}</strong></div>
+            <p v-if="plan.duration_semantics !== 'WALKING_ONLY' && place.stay_minutes != null" class="stay-info">建议停留约 {{ place.stay_minutes }} 分钟</p>
+            <p v-if="plan.duration_semantics === 'WALKING_ONLY' && stayAdvice(place.poi.id)" class="stay-info">停留建议：{{ stayAdvice(place.poi.id) }}</p>
+            <p class="place-address">{{ place.poi.address || '地址以高德为准' }}</p>
+            <footer class="place-footer"><a :href="place.poi.source_url || poiUrl(place.poi)" target="_blank" rel="noopener noreferrer">在高德查看 ↗</a><span>来源：高德</span></footer>
+            <time v-if="place.poi.retrieved_at" class="place-time" :datetime="place.poi.retrieved_at">查询于 {{ new Date(place.poi.retrieved_at).toLocaleString() }}</time>
+          </article>
+        </div>
+        <a-empty v-else description="暂无符合条件的地点，请调整搜索范围或偏好" />
+        <div v-if="plan.places.length > placesPageSize" class="places-pagination"><a-pagination v-model:current="placesPage" :total="plan.places.length" :page-size="placesPageSize" :show-size-changer="false" :show-less-items="true" :disabled="busy" @change="scrollToPlaces" /></div>
+      </section>
       <div class="result-grid">
         <section>
-          <a-card :bordered="false" class="travel-card"><h2>{{ food ? '挑选一家餐厅' : attraction ? '推荐景点' : '你的游览顺序' }}</h2><p class="muted">{{ food ? '按偏好匹配度排序，距离均为餐厅到起点的直线距离，请选择其中一家。' : attraction ? '按偏好匹配度排序，距离均为景点到起点的直线距离。' : (plan.duration_semantics === 'WALKING_ONLY' ? '路线包含起点到第一站；停留建议仅供参考，不计入步行时长。' : '路线包含起点到第一站；停留时间为估计。') }}</p>
-            <article v-for="place in plan.places" :key="place.poi.id" class="place">
-              <div class="place-title"><span class="rank">{{ place.step_order }}</span><h3>{{ place.poi.name }}</h3></div>
-              <p class="muted">{{ place.poi.category }}</p><p>{{ place.why_selected }}</p><p>{{ place.poi.address || '地址以高德为准' }}</p>
-              <div v-if="food || attraction" class="route-info">距起点（直线）：{{ place.distance_from_origin_meters != null ? place.distance_from_origin_meters + ' 米' : '未记录，请重新规划' }}</div>
-              <div v-else class="route-info">{{ food ? '从起点步行' : fromName(place.poi.id) + ' → 本站' }}：{{ routeText(place.poi.id) }}<span v-if="plan.duration_semantics !== 'WALKING_ONLY' && place.stay_minutes != null"> · 停留约 {{ place.stay_minutes }} 分钟</span></div>
-              <p v-if="plan.duration_semantics === 'WALKING_ONLY' && stayAdvice(place.poi.id)" class="muted">停留建议：{{ stayAdvice(place.poi.id) }}</p>
-              <a :href="place.poi.source_url || poiUrl(place.poi)" target="_blank" rel="noopener noreferrer">在高德查看地点 ↗</a><p v-if="place.poi.retrieved_at" class="muted">来源：高德 · {{ new Date(place.poi.retrieved_at).toLocaleString() }}</p>
-            </article>
-          </a-card>
           <a-card :bordered="false" class="travel-card"><h2>地点分布</h2><template v-if="mapGroups.length"><p v-if="mapGroups.length > 1" class="muted">第 {{ mapPage }} / {{ mapGroups.length }} 组，展示第 {{ (mapPage - 1) * 5 + 1 }}–{{ Math.min(mapPage * 5, plan.places.length) }} 个地点；每组均包含起点，地点编号与列表一致。</p><img v-if="!mapFailed" :key="mapPoints" :src="mapImageUrl(mapPoints, (mapPage - 1) * 5 + 1)" class="map-image" alt="起点与推荐地点分布" @error="mapFailed=true; showError('地图加载失败，请稍后重试或使用地点链接查看。')" /><a-empty v-else description="地图暂不可用，请使用地点链接" /><a-pagination v-if="mapGroups.length > 1" v-model:current="mapPage" :total="mapGroups.length" :page-size="1" :show-size-changer="false" size="small" /></template><a-empty v-else description="暂无地点可展示" /><p class="muted">{{ food || attraction ? '地图展示起点与推荐地点的位置。' : '这是地点分布图；步行路线以每段的高德规划结果为准。' }}</p></a-card>
         </section>
         <aside>
@@ -82,6 +94,13 @@ let loadId=0
 const plan=computed(()=>snapshot.value!.latest_plan),food=computed(()=>snapshot.value?.latest_plan.routed_skill==='FOOD')
 const attraction=computed(()=>snapshot.value?.latest_plan.routed_skill==='ATTRACTION')
 const requestedCount=computed(()=>snapshot.value ? (food.value ? snapshot.value.state.food_limit : snapshot.value.state.target_stops) : 0)
+const placesPage = ref(1)
+const placesPageSize = 12
+const placesSection = ref<HTMLElement | null>(null)
+const visiblePlaces = computed(() => snapshot.value
+  ? plan.value.places.slice((placesPage.value - 1) * placesPageSize, placesPage.value * placesPageSize)
+  : [])
+function scrollToPlaces() { placesSection.value?.scrollIntoView({block:'start'}) }
 const mapPage=ref(1)
 const mapGroups=computed(()=> {
   if (!snapshot.value) return []
@@ -100,7 +119,7 @@ async function load() {
     if(version !== undefined && (!Number.isInteger(version) || version < 1)) throw new Error('规划版本无效')
     const response=await getTrip(String(route.params.id),version)
     if(id !== loadId) return
-    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);mapPage.value=1;mapFailed.value=false;coverFailed.value=false
+    snapshot.value=response.data;meta.value=response.meta;rememberTrip(response.data.state.trip_id);placesPage.value=1;mapPage.value=1;mapFailed.value=false;coverFailed.value=false
   } catch(e) {if(id===loadId) error.value=e instanceof Error ? e.message : '读取失败'} finally {if(id===loadId) busy.value=false}
 }
 watch(()=>[route.params.id,route.query.version],()=>{snapshot.value=null;clarification.value='';pending.value='';text.value='';load()},{immediate:true})
@@ -118,7 +137,7 @@ async function send() {
     let restored
     try { restored=await getTrip(response.data.trip_id) }
     catch { throw new Error('行程已保存，但读取新结果失败。请点击“刷新已保存行程”后继续修改') }
-    snapshot.value=restored.data;meta.value=response.meta;mapPage.value=1;mapFailed.value=false;coverFailed.value=false;clarification.value='';pending.value='';text.value=''
+    snapshot.value=restored.data;meta.value=response.meta;placesPage.value=1;mapPage.value=1;mapFailed.value=false;coverFailed.value=false;clarification.value='';pending.value='';text.value=''
     historyRefresh.value++
     await router.replace({name:ROUTE_NAMES.TRIP_DETAIL,params:{id:response.data.trip_id}})
   } catch(e) {
@@ -128,18 +147,30 @@ async function send() {
 }
 </script>
 <style scoped>
-.actions {display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.actions {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;}
 .result-hero {position:relative;overflow:hidden;background:linear-gradient(120deg,#173b35,#377c62);border-radius:22px;color:white;}
 .result-hero>img {position:absolute;width:100%;height:100%;object-fit:cover;opacity:.25;}
 .hero-text {position:relative;padding:36px;}.hero-text h1 {font-size:32px;}.hero-text p {line-height:1.8;}
 .chips {display:flex;flex-wrap:wrap;gap:12px;}.chips span {padding:6px 12px;border:1px solid #ffffff70;border-radius:24px;}
 .credit {display:block;color:white;margin-top:16px;font-size:12px;}
 .narration-card {margin-top:22px;}.narration-text {white-space:pre-line;line-height:1.9;overflow-wrap:anywhere;}
-.result-grid {display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:22px;margin-top:22px;}
-.place {border-bottom:1px solid #e1eae5;padding:16px 0;overflow-wrap:anywhere;}.place:last-child {border:0;}
-.place-title {display:flex;align-items:center;gap:12px;}.place-title h3 {margin:0;font-size:20px;}
-.rank {background:#247b5d;color:white;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;flex-shrink:0;}
-.route-info {background:#edf5ef;padding:10px;border-radius:8px;margin:12px 0;font-size:13px;}
+.places-section {margin-top:28px;scroll-margin-top:20px;}
+.places-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;}
+.places-heading h2 {margin:0;font-size:23px;color:#254c3d;}.places-heading p {margin:7px 0 0;}
+.places-count {background:#e8f1eb;border:1px solid #d9e7de;border-radius:24px;padding:7px 13px;color:#4e7462;font-size:12px;white-space:nowrap;}
+.places-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;}
+.place-card {display:flex;flex-direction:column;min-width:0;padding:22px;background:#fff;border:1px solid #dfe9e2;border-radius:16px;box-shadow:0 5px 18px #1c3c2908;overflow-wrap:anywhere;}
+.place-title {display:flex;align-items:flex-start;gap:11px;}.place-title h3 {margin:2px 0 0;font-size:18px;line-height:1.5;color:#254c3d;}
+.rank {background:#247b5d;color:#fff;min-width:30px;height:30px;padding:0 5px;display:grid;place-items:center;border-radius:9px;flex-shrink:0;font-size:13px;font-weight:600;}
+.place-categories {display:flex;gap:6px;flex-wrap:wrap;margin-top:15px;}.place-categories span {font-size:11px;color:#5f7e6e;background:#f0f5f1;padding:4px 8px;border-radius:5px;}
+.place-reason {font-size:14px;color:#4d6559;line-height:1.85;margin:16px 0;white-space:pre-line;}
+.route-info {display:flex;flex-direction:column;gap:5px;background:#edf5ef;padding:12px;border-radius:9px;margin-top:auto;font-size:12px;color:#688172;}.route-info strong {font-size:15px;font-weight:600;color:#286348;}
+.place-address {font-size:12px;line-height:1.7;color:#7b8c82;margin:14px 0;}.stay-info {font-size:12px;color:#688172;line-height:1.7;margin:9px 0 0;}
+.place-footer {border-top:1px solid #edf1ed;display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:13px;font-size:12px;}.place-footer a {color:#247b5d;font-weight:550;}.place-footer span,.place-time {font-size:10px;color:#93a196;}.place-time {display:block;margin-top:8px;}
+.places-pagination {display:flex;justify-content:center;margin:24px 0;}
+.result-grid {display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:22px;margin-top:28px;}.result-grid>section,.result-grid>aside {min-width:0;}
 .map-image {width:100%;border-radius:10px;}.chat-form {margin-top:18px;}li {line-height:1.8;margin:8px 0;}ul {padding-left:20px;}
+@media(max-width:1000px) {.places-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:850px) {.result-grid {grid-template-columns:1fr;}.hero-text {padding:24px;}}
+@media(max-width:600px) {.places-grid {grid-template-columns:1fr;}.places-heading {align-items:flex-start;}.places-heading h2 {font-size:20px;}.place-card {padding:20px;}.actions {flex-wrap:wrap;}.places-pagination :deep(.ant-pagination-item),.places-pagination :deep(.ant-pagination-prev),.places-pagination :deep(.ant-pagination-next) {min-width:28px;margin-inline-end:4px;}}
 </style>
